@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'services/isar_service.dart';
 import 'services/health_service.dart';
 import 'services/api_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -9,11 +10,18 @@ void main() async {
   final isarService = await IsarService.build();
   final healthService = HealthService();
   final apiService = ApiService();
+  final notificationService = NotificationService(
+    isarService: isarService,
+    healthService: healthService,
+  );
+  
+  await notificationService.init();
   
   runApp(MyApp(
     isarService: isarService,
     healthService: healthService,
     apiService: apiService,
+    notificationService: notificationService,
   ));
 }
 
@@ -21,12 +29,14 @@ class MyApp extends StatelessWidget {
   final IsarService isarService;
   final HealthService healthService;
   final ApiService apiService;
+  final NotificationService notificationService;
   
   const MyApp({
     super.key, 
     required this.isarService,
     required this.healthService,
     required this.apiService,
+    required this.notificationService,
   });
 
   @override
@@ -43,6 +53,7 @@ class MyApp extends StatelessWidget {
         isarService: isarService,
         healthService: healthService,
         apiService: apiService,
+        notificationService: notificationService,
       ),
     );
   }
@@ -55,12 +66,14 @@ class MyHomePage extends StatefulWidget {
     required this.isarService,
     required this.healthService,
     required this.apiService,
+    required this.notificationService,
   });
 
   final String title;
   final IsarService isarService;
   final HealthService healthService;
   final ApiService apiService;
+  final NotificationService notificationService;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -82,6 +95,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _initApp() async {
     final authorized = await widget.healthService.requestPermissions();
+    await widget.notificationService.requestPermissions();
+    
     if (!mounted) return;
     setState(() => _isAuthorized = authorized);
 
@@ -102,12 +117,9 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() => _isSyncing = true);
 
     try {
-      // 1. Get real data from sensors
       final steps = await widget.healthService.getTodaySteps();
-      
-      // 2. Sync with Backend
       final result = await widget.apiService.syncActivity(
-        userId: "user_123", // For demo
+        userId: "user_123",
         steps: steps,
         workoutMinutes: 0,
       );
@@ -118,7 +130,6 @@ class _MyHomePageState extends State<MyHomePage> {
           _dailyGoal = result['daily_goal_ml'];
           _advice = result['advice'];
         });
-        // 3. Cache locally
         await widget.isarService.updateActivityCache(steps, 0, false);
       }
     } finally {
@@ -157,7 +168,6 @@ class _MyHomePageState extends State<MyHomePage> {
           padding: const EdgeInsets.all(24.0),
           child: Column(
             children: [
-              // Goal Advice
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -174,7 +184,6 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               const SizedBox(height: 30),
 
-              // Progress
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -188,6 +197,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                   ),
                   Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('$_totalWater', style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
                       Text('of $_dailyGoal ml', style: TextStyle(color: Colors.grey.shade600)),
@@ -197,7 +207,6 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               const SizedBox(height: 40),
 
-              // Steps Card
               Card(
                 elevation: 0,
                 color: Colors.orange.shade50,
@@ -206,6 +215,14 @@ class _MyHomePageState extends State<MyHomePage> {
                   title: Text('$_steps steps'),
                   subtitle: const Text('Data synced from your device'),
                 ),
+              ),
+              const SizedBox(height: 20),
+              
+              // New: Test Smart Notification Button
+              OutlinedButton.icon(
+                onPressed: () => widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal),
+                icon: const Icon(Icons.notifications_active),
+                label: const Text('Test Smart Notification'),
               ),
             ],
           ),
