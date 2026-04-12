@@ -3,6 +3,10 @@ import 'services/isar_service.dart';
 import 'services/health_service.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/history_screen.dart';
+import 'widgets/water_wave_painter.dart';
+import 'models/user_profile.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,12 +52,118 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: MyHomePage(
-        title: 'Water Reminder', 
+      home: Initializer(
         isarService: isarService,
         healthService: healthService,
         apiService: apiService,
         notificationService: notificationService,
+      ),
+    );
+  }
+}
+
+class Initializer extends StatefulWidget {
+  final IsarService isarService;
+  final HealthService healthService;
+  final ApiService apiService;
+  final NotificationService notificationService;
+
+  const Initializer({
+    super.key,
+    required this.isarService,
+    required this.healthService,
+    required this.apiService,
+    required this.notificationService,
+  });
+
+  @override
+  State<Initializer> createState() => _InitializerState();
+}
+
+class _InitializerState extends State<Initializer> {
+  bool? _isProfileComplete;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkProfile();
+  }
+
+  Future<void> _checkProfile() async {
+    final profile = await widget.isarService.getProfile();
+    setState(() {
+      _isProfileComplete = profile != null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isProfileComplete == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (!_isProfileComplete!) {
+      return OnboardingScreen(
+        isarService: widget.isarService,
+        onComplete: () => setState(() => _isProfileComplete = true),
+      );
+    }
+
+    return MainContainer(
+      isarService: widget.isarService,
+      healthService: widget.healthService,
+      apiService: widget.apiService,
+      notificationService: widget.notificationService,
+    );
+  }
+}
+
+class MainContainer extends StatefulWidget {
+  final IsarService isarService;
+  final HealthService healthService;
+  final ApiService apiService;
+  final NotificationService notificationService;
+
+  const MainContainer({
+    super.key,
+    required this.isarService,
+    required this.healthService,
+    required this.apiService,
+    required this.notificationService,
+  });
+
+  @override
+  State<MainContainer> createState() => _MainContainerState();
+}
+
+class _MainContainerState extends State<MainContainer> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final screens = [
+      MyHomePage(
+        title: 'Water Reminder',
+        isarService: widget.isarService,
+        healthService: widget.healthService,
+        apiService: widget.apiService,
+        notificationService: widget.notificationService,
+      ),
+      HistoryScreen(isarService: widget.isarService),
+    ];
+
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
+        ],
       ),
     );
   }
@@ -86,6 +196,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String _advice = "Stay hydrated!";
   bool _isAuthorized = false;
   bool _isSyncing = false;
+  UserProfile? _profile;
 
   @override
   void initState() {
@@ -97,8 +208,13 @@ class _MyHomePageState extends State<MyHomePage> {
     final authorized = await widget.healthService.requestPermissions();
     await widget.notificationService.requestPermissions();
     
+    _profile = await widget.isarService.getProfile();
+    
     if (!mounted) return;
-    setState(() => _isAuthorized = authorized);
+    setState(() {
+      _isAuthorized = authorized;
+      if (_profile != null) _dailyGoal = _profile!.dailyBaseGoal;
+    });
 
     await _loadWaterData();
     if (authorized) {
@@ -122,6 +238,7 @@ class _MyHomePageState extends State<MyHomePage> {
         userId: "user_123",
         steps: steps,
         workoutMinutes: 0,
+        weight: _profile?.weight ?? 70.0,
       );
 
       if (result != null && mounted) {
@@ -151,87 +268,85 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
         actions: [
-          if (_isSyncing)
-            const Center(child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-            ))
-          else
-            IconButton(
-              icon: const Icon(Icons.cloud_sync),
-              onPressed: _syncWithBackend,
-            )
+          IconButton(
+            icon: _isSyncing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_sync),
+            onPressed: _isSyncing ? null : _syncWithBackend,
+          )
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
+      body: RefreshIndicator(
+        onRefresh: _syncWithBackend,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome, color: Colors.blue),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_advice, style: const TextStyle(fontStyle: FontStyle.italic))),
+                    ],
+                  ),
                 ),
-                child: Row(
+                const SizedBox(height: 30),
+        
+                // New: Water Wave Progress Widget
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    const Icon(Icons.auto_awesome, color: Colors.blue),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(_advice, style: const TextStyle(fontStyle: FontStyle.italic))),
+                    WaterWaveProgress(progress: progress, size: 220),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('$_totalWater', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
+                        Text('of $_dailyGoal ml', style: TextStyle(color: Colors.black54, fontSize: 16, fontWeight: FontWeight.w500)),
+                      ],
+                    )
                   ],
                 ),
-              ),
-              const SizedBox(height: 30),
-
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 200, height: 200,
-                    child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 12,
-                      backgroundColor: Colors.blue.shade100,
-                      color: Colors.blue.shade600,
-                    ),
+                const SizedBox(height: 40),
+        
+                Card(
+                  elevation: 0,
+                  color: Colors.orange.shade50,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: ListTile(
+                    leading: const Icon(Icons.directions_walk, color: Colors.orange, size: 32),
+                    title: Text('$_steps steps', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Activity data from sensors'),
+                    trailing: Text('+${((_steps / 1000).floor() * 100)} ml', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
                   ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('$_totalWater', style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
-                      Text('of $_dailyGoal ml', style: TextStyle(color: Colors.grey.shade600)),
-                    ],
-                  )
-                ],
-              ),
-              const SizedBox(height: 40),
-
-              Card(
-                elevation: 0,
-                color: Colors.orange.shade50,
-                child: ListTile(
-                  leading: const Icon(Icons.directions_walk, color: Colors.orange),
-                  title: Text('$_steps steps'),
-                  subtitle: const Text('Data synced from your device'),
                 ),
-              ),
-              const SizedBox(height: 20),
-              
-              // New: Test Smart Notification Button
-              OutlinedButton.icon(
-                onPressed: () => widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal),
-                icon: const Icon(Icons.notifications_active),
-                label: const Text('Test Smart Notification'),
-              ),
-            ],
+                const SizedBox(height: 20),
+                
+                OutlinedButton.icon(
+                  onPressed: () => widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal),
+                  icon: const Icon(Icons.notifications_active),
+                  label: const Text('Test Smart Notification'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addWater,
-        label: const Text('Add 250ml'),
+        label: const Text('Add 250ml', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         icon: const Icon(Icons.local_drink),
+        backgroundColor: Colors.blue.shade600,
+        foregroundColor: Colors.white,
       ),
     );
   }

@@ -28,6 +28,24 @@ class IsarService {
     await isar.writeTxn(() => isar.waterLogs.put(log));
   }
 
+  // --- User Profile ---
+
+  Future<void> saveProfile(double weight, int age) async {
+    final profile = UserProfile()
+      ..weight = weight
+      ..age = age
+      ..dailyBaseGoal = (weight * 30).toInt();
+
+    await isar.writeTxn(() async {
+      await isar.userProfiles.clear();
+      await isar.userProfiles.put(profile);
+    });
+  }
+
+  Future<UserProfile?> getProfile() async {
+    return await isar.userProfiles.where().findFirst();
+  }
+
   Future<List<WaterLog>> getTodayLogs() async {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
