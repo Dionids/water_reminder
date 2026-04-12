@@ -1,121 +1,220 @@
 import 'package:flutter/material.dart';
+import 'services/isar_service.dart';
+import 'services/health_service.dart';
+import 'services/api_service.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final isarService = await IsarService.build();
+  final healthService = HealthService();
+  final apiService = ApiService();
+  
+  runApp(MyApp(
+    isarService: isarService,
+    healthService: healthService,
+    apiService: apiService,
+  ));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final IsarService isarService;
+  final HealthService healthService;
+  final ApiService apiService;
+  
+  const MyApp({
+    super.key, 
+    required this.isarService,
+    required this.healthService,
+    required this.apiService,
+  });
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Water Reminder',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(
+        title: 'Water Reminder', 
+        isarService: isarService,
+        healthService: healthService,
+        apiService: apiService,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+  const MyHomePage({
+    super.key, 
+    required this.title, 
+    required this.isarService,
+    required this.healthService,
+    required this.apiService,
+  });
 
   final String title;
+  final IsarService isarService;
+  final HealthService healthService;
+  final ApiService apiService;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  int _totalWater = 0;
+  int _steps = 0;
+  int _dailyGoal = 2000;
+  String _advice = "Stay hydrated!";
+  bool _isAuthorized = false;
+  bool _isSyncing = false;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _initApp();
+  }
+
+  Future<void> _initApp() async {
+    final authorized = await widget.healthService.requestPermissions();
+    if (!mounted) return;
+    setState(() => _isAuthorized = authorized);
+
+    await _loadWaterData();
+    if (authorized) {
+      await _syncWithBackend();
+    }
+  }
+
+  Future<void> _loadWaterData() async {
+    final total = await widget.isarService.getTodayTotalWater();
+    if (!mounted) return;
+    setState(() => _totalWater = total);
+  }
+
+  Future<void> _syncWithBackend() async {
+    if (!_isAuthorized) return;
+    setState(() => _isSyncing = true);
+
+    try {
+      // 1. Get real data from sensors
+      final steps = await widget.healthService.getTodaySteps();
+      
+      // 2. Sync with Backend
+      final result = await widget.apiService.syncActivity(
+        userId: "user_123", // For demo
+        steps: steps,
+        workoutMinutes: 0,
+      );
+
+      if (result != null && mounted) {
+        setState(() {
+          _steps = steps;
+          _dailyGoal = result['daily_goal_ml'];
+          _advice = result['advice'];
+        });
+        // 3. Cache locally
+        await widget.isarService.updateActivityCache(steps, 0, false);
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
+
+  Future<void> _addWater() async {
+    await widget.isarService.addWater(250);
+    await _loadWaterData();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    double progress = (_totalWater / _dailyGoal).clamp(0.0, 1.0);
+
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
+        actions: [
+          if (_isSyncing)
+            const Center(child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            ))
+          else
+            IconButton(
+              icon: const Icon(Icons.cloud_sync),
+              onPressed: _syncWithBackend,
+            )
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              // Goal Advice
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: Colors.blue),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(_advice, style: const TextStyle(fontStyle: FontStyle.italic))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              // Progress
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 200, height: 200,
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 12,
+                      backgroundColor: Colors.blue.shade100,
+                      color: Colors.blue.shade600,
+                    ),
+                  ),
+                  Column(
+                    children: [
+                      Text('$_totalWater', style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
+                      Text('of $_dailyGoal ml', style: TextStyle(color: Colors.grey.shade600)),
+                    ],
+                  )
+                ],
+              ),
+              const SizedBox(height: 40),
+
+              // Steps Card
+              Card(
+                elevation: 0,
+                color: Colors.orange.shade50,
+                child: ListTile(
+                  leading: const Icon(Icons.directions_walk, color: Colors.orange),
+                  title: Text('$_steps steps'),
+                  subtitle: const Text('Data synced from your device'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addWater,
+        label: const Text('Add 250ml'),
+        icon: const Icon(Icons.local_drink),
       ),
     );
   }

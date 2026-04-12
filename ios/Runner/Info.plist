@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>We need access to your steps and activity to calculate your daily water goal.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>We need access to your steps and activity to calculate your daily water goal.</string>
 </dict>
 </plist>
