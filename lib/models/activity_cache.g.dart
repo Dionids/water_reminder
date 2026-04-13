@@ -94,10 +94,10 @@ ActivityCache _activityCacheDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = ActivityCache(
-    date: reader.readDateTime(offsets[0]),
-    isAsleep: reader.readBoolOrNull(offsets[1]) ?? false,
-    steps: reader.readLongOrNull(offsets[2]) ?? 0,
-    workoutMinutes: reader.readLongOrNull(offsets[3]) ?? 0,
+    date: reader.readDateTimeOrNull(offsets[0]),
+    isAsleep: reader.readBoolOrNull(offsets[1]),
+    steps: reader.readLongOrNull(offsets[2]),
+    workoutMinutes: reader.readLongOrNull(offsets[3]),
   );
   object.id = id;
   return object;
@@ -111,13 +111,13 @@ P _activityCacheDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 1:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
+      return (reader.readBoolOrNull(offset)) as P;
     case 2:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 3:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
+      return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -137,38 +137,38 @@ void _activityCacheAttach(
 }
 
 extension ActivityCacheByIndex on IsarCollection<ActivityCache> {
-  Future<ActivityCache?> getByDate(DateTime date) {
+  Future<ActivityCache?> getByDate(DateTime? date) {
     return getByIndex(r'date', [date]);
   }
 
-  ActivityCache? getByDateSync(DateTime date) {
+  ActivityCache? getByDateSync(DateTime? date) {
     return getByIndexSync(r'date', [date]);
   }
 
-  Future<bool> deleteByDate(DateTime date) {
+  Future<bool> deleteByDate(DateTime? date) {
     return deleteByIndex(r'date', [date]);
   }
 
-  bool deleteByDateSync(DateTime date) {
+  bool deleteByDateSync(DateTime? date) {
     return deleteByIndexSync(r'date', [date]);
   }
 
-  Future<List<ActivityCache?>> getAllByDate(List<DateTime> dateValues) {
+  Future<List<ActivityCache?>> getAllByDate(List<DateTime?> dateValues) {
     final values = dateValues.map((e) => [e]).toList();
     return getAllByIndex(r'date', values);
   }
 
-  List<ActivityCache?> getAllByDateSync(List<DateTime> dateValues) {
+  List<ActivityCache?> getAllByDateSync(List<DateTime?> dateValues) {
     final values = dateValues.map((e) => [e]).toList();
     return getAllByIndexSync(r'date', values);
   }
 
-  Future<int> deleteAllByDate(List<DateTime> dateValues) {
+  Future<int> deleteAllByDate(List<DateTime?> dateValues) {
     final values = dateValues.map((e) => [e]).toList();
     return deleteAllByIndex(r'date', values);
   }
 
-  int deleteAllByDateSync(List<DateTime> dateValues) {
+  int deleteAllByDateSync(List<DateTime?> dateValues) {
     final values = dateValues.map((e) => [e]).toList();
     return deleteAllByIndexSync(r'date', values);
   }
@@ -279,8 +279,29 @@ extension ActivityCacheQueryWhere
     });
   }
 
+  QueryBuilder<ActivityCache, ActivityCache, QAfterWhereClause> dateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'date',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterWhereClause>
+      dateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'date',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
   QueryBuilder<ActivityCache, ActivityCache, QAfterWhereClause> dateEqualTo(
-      DateTime date) {
+      DateTime? date) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(IndexWhereClause.equalTo(
         indexName: r'date',
@@ -290,7 +311,7 @@ extension ActivityCacheQueryWhere
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterWhereClause> dateNotEqualTo(
-      DateTime date) {
+      DateTime? date) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
@@ -325,7 +346,7 @@ extension ActivityCacheQueryWhere
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterWhereClause> dateGreaterThan(
-    DateTime date, {
+    DateTime? date, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -339,7 +360,7 @@ extension ActivityCacheQueryWhere
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterWhereClause> dateLessThan(
-    DateTime date, {
+    DateTime? date, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -353,8 +374,8 @@ extension ActivityCacheQueryWhere
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterWhereClause> dateBetween(
-    DateTime lowerDate,
-    DateTime upperDate, {
+    DateTime? lowerDate,
+    DateTime? upperDate, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -372,8 +393,26 @@ extension ActivityCacheQueryWhere
 
 extension ActivityCacheQueryFilter
     on QueryBuilder<ActivityCache, ActivityCache, QFilterCondition> {
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      dateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'date',
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      dateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'date',
+      ));
+    });
+  }
+
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition> dateEqualTo(
-      DateTime value) {
+      DateTime? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'date',
@@ -384,7 +423,7 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       dateGreaterThan(
-    DateTime value, {
+    DateTime? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -398,7 +437,7 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       dateLessThan(
-    DateTime value, {
+    DateTime? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -411,8 +450,8 @@ extension ActivityCacheQueryFilter
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition> dateBetween(
-    DateTime lower,
-    DateTime upper, {
+    DateTime? lower,
+    DateTime? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -482,7 +521,25 @@ extension ActivityCacheQueryFilter
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
-      isAsleepEqualTo(bool value) {
+      isAsleepIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'isAsleep',
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      isAsleepIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'isAsleep',
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      isAsleepEqualTo(bool? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'isAsleep',
@@ -492,7 +549,25 @@ extension ActivityCacheQueryFilter
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
-      stepsEqualTo(int value) {
+      stepsIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'steps',
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      stepsIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'steps',
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      stepsEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'steps',
@@ -503,7 +578,7 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       stepsGreaterThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -517,7 +592,7 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       stepsLessThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -531,8 +606,8 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       stepsBetween(
-    int lower,
-    int upper, {
+    int? lower,
+    int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -548,7 +623,25 @@ extension ActivityCacheQueryFilter
   }
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
-      workoutMinutesEqualTo(int value) {
+      workoutMinutesIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'workoutMinutes',
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      workoutMinutesIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'workoutMinutes',
+      ));
+    });
+  }
+
+  QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
+      workoutMinutesEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'workoutMinutes',
@@ -559,7 +652,7 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       workoutMinutesGreaterThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -573,7 +666,7 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       workoutMinutesLessThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -587,8 +680,8 @@ extension ActivityCacheQueryFilter
 
   QueryBuilder<ActivityCache, ActivityCache, QAfterFilterCondition>
       workoutMinutesBetween(
-    int lower,
-    int upper, {
+    int? lower,
+    int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -766,25 +859,25 @@ extension ActivityCacheQueryProperty
     });
   }
 
-  QueryBuilder<ActivityCache, DateTime, QQueryOperations> dateProperty() {
+  QueryBuilder<ActivityCache, DateTime?, QQueryOperations> dateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'date');
     });
   }
 
-  QueryBuilder<ActivityCache, bool, QQueryOperations> isAsleepProperty() {
+  QueryBuilder<ActivityCache, bool?, QQueryOperations> isAsleepProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isAsleep');
     });
   }
 
-  QueryBuilder<ActivityCache, int, QQueryOperations> stepsProperty() {
+  QueryBuilder<ActivityCache, int?, QQueryOperations> stepsProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'steps');
     });
   }
 
-  QueryBuilder<ActivityCache, int, QQueryOperations> workoutMinutesProperty() {
+  QueryBuilder<ActivityCache, int?, QQueryOperations> workoutMinutesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'workoutMinutes');
     });

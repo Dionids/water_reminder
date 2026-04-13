@@ -6,13 +6,12 @@ part 'water_log.g.dart';
 class WaterLog {
   Id id = Isar.autoIncrement;
 
-  int amountMl;      // Volume in ml
-  DateTime dateTime; // Time of consumption
-  String type;       // Type: "water", "coffee", "tea" etc.
+  int? amountMl;
+  
+  @Index()
+  DateTime? dateTime;
 
-  WaterLog({
-    required this.amountMl,
-    required this.dateTime,
-    this.type = 'water',
-  });
+  String type = 'water';
+
+  WaterLog({this.amountMl, this.dateTime, this.type = 'water'});
 }

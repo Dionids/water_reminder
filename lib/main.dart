@@ -91,9 +91,11 @@ class _InitializerState extends State<Initializer> {
 
   Future<void> _checkProfile() async {
     final profile = await widget.isarService.getProfile();
-    setState(() {
-      _isProfileComplete = profile != null;
-    });
+    if (mounted) {
+      setState(() {
+        _isProfileComplete = profile != null;
+      });
+    }
   }
 
   @override
@@ -213,7 +215,9 @@ class _MyHomePageState extends State<MyHomePage> {
     if (!mounted) return;
     setState(() {
       _isAuthorized = authorized;
-      if (_profile != null) _dailyGoal = _profile!.dailyBaseGoal;
+      if (_profile != null && _profile!.dailyBaseGoal != null) {
+        _dailyGoal = _profile!.dailyBaseGoal!;
+      }
     });
 
     await _loadWaterData();
@@ -244,11 +248,13 @@ class _MyHomePageState extends State<MyHomePage> {
       if (result != null && mounted) {
         setState(() {
           _steps = steps;
-          _dailyGoal = result['daily_goal_ml'];
-          _advice = result['advice'];
+          _dailyGoal = result['daily_goal_ml'] as int;
+          _advice = result['advice'] as String;
         });
         await widget.isarService.updateActivityCache(steps, 0, false);
       }
+    } catch (e) {
+      // Ignore sync errors
     } finally {
       if (mounted) setState(() => _isSyncing = false);
     }
@@ -298,7 +304,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
                 const SizedBox(height: 30),
         
-                // New: Water Wave Progress Widget
                 Stack(
                   alignment: Alignment.center,
                   children: [
@@ -307,7 +312,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text('$_totalWater', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
-                        Text('of $_dailyGoal ml', style: TextStyle(color: Colors.black54, fontSize: 16, fontWeight: FontWeight.w500)),
+                        Text('of $_dailyGoal ml', style: const TextStyle(color: Colors.black54, fontSize: 16, fontWeight: FontWeight.w500)),
                       ],
                     )
                   ],

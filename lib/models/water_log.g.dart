@@ -38,7 +38,21 @@ const WaterLogSchema = CollectionSchema(
   deserialize: _waterLogDeserialize,
   deserializeProp: _waterLogDeserializeProp,
   idName: r'id',
-  indexes: {},
+  indexes: {
+    r'dateTime': IndexSchema(
+      id: -138851979697481250,
+      name: r'dateTime',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'dateTime',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    )
+  },
   links: {},
   embeddedSchemas: {},
   getId: _waterLogGetId,
@@ -75,8 +89,8 @@ WaterLog _waterLogDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = WaterLog(
-    amountMl: reader.readLong(offsets[0]),
-    dateTime: reader.readDateTime(offsets[1]),
+    amountMl: reader.readLongOrNull(offsets[0]),
+    dateTime: reader.readDateTimeOrNull(offsets[1]),
     type: reader.readStringOrNull(offsets[2]) ?? 'water',
   );
   object.id = id;
@@ -91,9 +105,9 @@ P _waterLogDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readLong(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 1:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 2:
       return (reader.readStringOrNull(offset) ?? 'water') as P;
     default:
@@ -117,6 +131,14 @@ extension WaterLogQueryWhereSort on QueryBuilder<WaterLog, WaterLog, QWhere> {
   QueryBuilder<WaterLog, WaterLog, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhere> anyDateTime() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'dateTime'),
+      );
     });
   }
 }
@@ -186,12 +208,138 @@ extension WaterLogQueryWhere on QueryBuilder<WaterLog, WaterLog, QWhereClause> {
       ));
     });
   }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhereClause> dateTimeIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'dateTime',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhereClause> dateTimeIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'dateTime',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhereClause> dateTimeEqualTo(
+      DateTime? dateTime) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'dateTime',
+        value: [dateTime],
+      ));
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhereClause> dateTimeNotEqualTo(
+      DateTime? dateTime) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'dateTime',
+              lower: [],
+              upper: [dateTime],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'dateTime',
+              lower: [dateTime],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'dateTime',
+              lower: [dateTime],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'dateTime',
+              lower: [],
+              upper: [dateTime],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhereClause> dateTimeGreaterThan(
+    DateTime? dateTime, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'dateTime',
+        lower: [dateTime],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhereClause> dateTimeLessThan(
+    DateTime? dateTime, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'dateTime',
+        lower: [],
+        upper: [dateTime],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterWhereClause> dateTimeBetween(
+    DateTime? lowerDateTime,
+    DateTime? upperDateTime, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'dateTime',
+        lower: [lowerDateTime],
+        includeLower: includeLower,
+        upper: [upperDateTime],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension WaterLogQueryFilter
     on QueryBuilder<WaterLog, WaterLog, QFilterCondition> {
+  QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> amountMlIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'amountMl',
+      ));
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> amountMlIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'amountMl',
+      ));
+    });
+  }
+
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> amountMlEqualTo(
-      int value) {
+      int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'amountMl',
@@ -201,7 +349,7 @@ extension WaterLogQueryFilter
   }
 
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> amountMlGreaterThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -214,7 +362,7 @@ extension WaterLogQueryFilter
   }
 
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> amountMlLessThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -227,8 +375,8 @@ extension WaterLogQueryFilter
   }
 
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> amountMlBetween(
-    int lower,
-    int upper, {
+    int? lower,
+    int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -243,8 +391,24 @@ extension WaterLogQueryFilter
     });
   }
 
+  QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> dateTimeIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'dateTime',
+      ));
+    });
+  }
+
+  QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> dateTimeIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'dateTime',
+      ));
+    });
+  }
+
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> dateTimeEqualTo(
-      DateTime value) {
+      DateTime? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'dateTime',
@@ -254,7 +418,7 @@ extension WaterLogQueryFilter
   }
 
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> dateTimeGreaterThan(
-    DateTime value, {
+    DateTime? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -267,7 +431,7 @@ extension WaterLogQueryFilter
   }
 
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> dateTimeLessThan(
-    DateTime value, {
+    DateTime? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -280,8 +444,8 @@ extension WaterLogQueryFilter
   }
 
   QueryBuilder<WaterLog, WaterLog, QAfterFilterCondition> dateTimeBetween(
-    DateTime lower,
-    DateTime upper, {
+    DateTime? lower,
+    DateTime? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -604,13 +768,13 @@ extension WaterLogQueryProperty
     });
   }
 
-  QueryBuilder<WaterLog, int, QQueryOperations> amountMlProperty() {
+  QueryBuilder<WaterLog, int?, QQueryOperations> amountMlProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'amountMl');
     });
   }
 
-  QueryBuilder<WaterLog, DateTime, QQueryOperations> dateTimeProperty() {
+  QueryBuilder<WaterLog, DateTime?, QQueryOperations> dateTimeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'dateTime');
     });

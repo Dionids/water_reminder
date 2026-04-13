@@ -79,12 +79,13 @@ UserProfile _userProfileDeserialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  final object = UserProfile();
-  object.age = reader.readLongOrNull(offsets[0]);
-  object.dailyBaseGoal = reader.readLong(offsets[1]);
+  final object = UserProfile(
+    age: reader.readLongOrNull(offsets[0]),
+    dailyBaseGoal: reader.readLongOrNull(offsets[1]),
+    lastSync: reader.readDateTimeOrNull(offsets[2]),
+    weight: reader.readDoubleOrNull(offsets[3]),
+  );
   object.id = id;
-  object.lastSync = reader.readDateTime(offsets[2]);
-  object.weight = reader.readDoubleOrNull(offsets[3]);
   return object;
 }
 
@@ -98,9 +99,9 @@ P _userProfileDeserializeProp<P>(
     case 0:
       return (reader.readLongOrNull(offset)) as P;
     case 1:
-      return (reader.readLong(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 2:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 3:
       return (reader.readDoubleOrNull(offset)) as P;
     default:
@@ -271,7 +272,25 @@ extension UserProfileQueryFilter
   }
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
-      dailyBaseGoalEqualTo(int value) {
+      dailyBaseGoalIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'dailyBaseGoal',
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      dailyBaseGoalIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'dailyBaseGoal',
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      dailyBaseGoalEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'dailyBaseGoal',
@@ -282,7 +301,7 @@ extension UserProfileQueryFilter
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       dailyBaseGoalGreaterThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -296,7 +315,7 @@ extension UserProfileQueryFilter
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       dailyBaseGoalLessThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -310,8 +329,8 @@ extension UserProfileQueryFilter
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       dailyBaseGoalBetween(
-    int lower,
-    int upper, {
+    int? lower,
+    int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -379,8 +398,26 @@ extension UserProfileQueryFilter
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastSyncIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'lastSync',
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastSyncIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'lastSync',
+      ));
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> lastSyncEqualTo(
-      DateTime value) {
+      DateTime? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'lastSync',
@@ -391,7 +428,7 @@ extension UserProfileQueryFilter
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       lastSyncGreaterThan(
-    DateTime value, {
+    DateTime? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -405,7 +442,7 @@ extension UserProfileQueryFilter
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       lastSyncLessThan(
-    DateTime value, {
+    DateTime? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -418,8 +455,8 @@ extension UserProfileQueryFilter
   }
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> lastSyncBetween(
-    DateTime lower,
-    DateTime upper, {
+    DateTime? lower,
+    DateTime? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -678,13 +715,13 @@ extension UserProfileQueryProperty
     });
   }
 
-  QueryBuilder<UserProfile, int, QQueryOperations> dailyBaseGoalProperty() {
+  QueryBuilder<UserProfile, int?, QQueryOperations> dailyBaseGoalProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'dailyBaseGoal');
     });
   }
 
-  QueryBuilder<UserProfile, DateTime, QQueryOperations> lastSyncProperty() {
+  QueryBuilder<UserProfile, DateTime?, QQueryOperations> lastSyncProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'lastSync');
     });
