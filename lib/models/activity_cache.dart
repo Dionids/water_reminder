@@ -1,22 +1,25 @@
-import 'package:isar/isar.dart';
+import 'package:hive/hive.dart';
 
 part 'activity_cache.g.dart';
 
-@collection
-class ActivityCache {
-  Id id = Isar.autoIncrement;
+@HiveType(typeId: 2)
+class ActivityCache extends HiveObject {
+  @HiveField(0)
+  final DateTime date;
 
-  int? steps;
-  int? workoutMinutes;
-  bool? isAsleep;
-  
-  @Index(unique: true, replace: true)
-  DateTime? date;
+  @HiveField(1)
+  final bool isAsleep;
+
+  @HiveField(2)
+  final int stepCount;
+
+  @HiveField(3)
+  final int lastSyncTimestamp;
 
   ActivityCache({
-    this.steps = 0,
-    this.workoutMinutes = 0,
-    this.isAsleep = false,
-    this.date,
+    required this.date,
+    required this.isAsleep,
+    required this.stepCount,
+    required this.lastSyncTimestamp,
   });
 }

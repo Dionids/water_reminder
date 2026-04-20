@@ -1,358 +1,191 @@
 import 'package:flutter/material.dart';
-import 'services/isar_service.dart';
+import 'package:intl/intl.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'services/hive_service.dart';
 import 'services/health_service.dart';
-import 'services/api_service.dart';
 import 'services/notification_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/history_screen.dart';
-import 'widgets/water_wave_painter.dart';
-import 'models/user_profile.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  tz.initializeTimeZones();
   
-  final isarService = await IsarService.build();
+  // Initialize Services
+  final hiveService = HiveService();
+  await hiveService.init();
+  
   final healthService = HealthService();
-  final apiService = ApiService();
   final notificationService = NotificationService(
-    isarService: isarService,
-    healthService: healthService,
+    hiveService: hiveService, 
+    healthService: healthService
   );
-  
   await notificationService.init();
-  
+
   runApp(MyApp(
-    isarService: isarService,
+    hiveService: hiveService,
     healthService: healthService,
-    apiService: apiService,
     notificationService: notificationService,
   ));
 }
 
 class MyApp extends StatelessWidget {
-  final IsarService isarService;
+  final HiveService hiveService;
   final HealthService healthService;
-  final ApiService apiService;
   final NotificationService notificationService;
-  
+
   const MyApp({
     super.key, 
-    required this.isarService,
+    required this.hiveService,
     required this.healthService,
-    required this.apiService,
     required this.notificationService,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Check if profile exists to decide initial route
+    final profile = hiveService.getProfile();
+    final initialRoute = profile == null ? '/onboarding' : '/home';
+
     return MaterialApp(
       title: 'Water Reminder',
-      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: Initializer(
-        isarService: isarService,
-        healthService: healthService,
-        apiService: apiService,
-        notificationService: notificationService,
-      ),
-    );
-  }
-}
-
-class Initializer extends StatefulWidget {
-  final IsarService isarService;
-  final HealthService healthService;
-  final ApiService apiService;
-  final NotificationService notificationService;
-
-  const Initializer({
-    super.key,
-    required this.isarService,
-    required this.healthService,
-    required this.apiService,
-    required this.notificationService,
-  });
-
-  @override
-  State<Initializer> createState() => _InitializerState();
-}
-
-class _InitializerState extends State<Initializer> {
-  bool? _isProfileComplete;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkProfile();
-  }
-
-  Future<void> _checkProfile() async {
-    final profile = await widget.isarService.getProfile();
-    if (mounted) {
-      setState(() {
-        _isProfileComplete = profile != null;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isProfileComplete == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (!_isProfileComplete!) {
-      return OnboardingScreen(
-        isarService: widget.isarService,
-        onComplete: () => setState(() => _isProfileComplete = true),
-      );
-    }
-
-    return MainContainer(
-      isarService: widget.isarService,
-      healthService: widget.healthService,
-      apiService: widget.apiService,
-      notificationService: widget.notificationService,
-    );
-  }
-}
-
-class MainContainer extends StatefulWidget {
-  final IsarService isarService;
-  final HealthService healthService;
-  final ApiService apiService;
-  final NotificationService notificationService;
-
-  const MainContainer({
-    super.key,
-    required this.isarService,
-    required this.healthService,
-    required this.apiService,
-    required this.notificationService,
-  });
-
-  @override
-  State<MainContainer> createState() => _MainContainerState();
-}
-
-class _MainContainerState extends State<MainContainer> {
-  int _currentIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final screens = [
-      MyHomePage(
-        title: 'Water Reminder',
-        isarService: widget.isarService,
-        healthService: widget.healthService,
-        apiService: widget.apiService,
-        notificationService: widget.notificationService,
-      ),
-      HistoryScreen(isarService: widget.isarService),
-    ];
-
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-        ],
-      ),
+      initialRoute: initialRoute,
+      routes: {
+        '/home': (context) => MyHomePage(
+          hiveService: hiveService,
+          healthService: healthService,
+          notificationService: notificationService,
+        ),
+        '/onboarding': (context) => OnboardingScreen(hiveService: hiveService),
+        '/history': (context) => HistoryScreen(hiveService: hiveService),
+      },
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
+  final HiveService hiveService;
+  final HealthService healthService;
+  final NotificationService notificationService;
+
   const MyHomePage({
     super.key, 
-    required this.title, 
-    required this.isarService,
+    required this.hiveService,
     required this.healthService,
-    required this.apiService,
     required this.notificationService,
   });
-
-  final String title;
-  final IsarService isarService;
-  final HealthService healthService;
-  final ApiService apiService;
-  final NotificationService notificationService;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _totalWater = 0;
-  int _steps = 0;
+  double _todayWater = 0;
   int _dailyGoal = 2000;
-  String _advice = "Stay hydrated!";
-  bool _isAuthorized = false;
-  bool _isSyncing = false;
-  UserProfile? _profile;
 
   @override
   void initState() {
     super.initState();
-    _initApp();
+    _loadData();
   }
 
-  Future<void> _initApp() async {
-    final authorized = await widget.healthService.requestPermissions();
-    await widget.notificationService.requestPermissions();
+  Future<void> _loadData() async {
+    final total = await widget.hiveService.getTotalWaterToday();
+    final profile = widget.hiveService.getProfile();
     
-    _profile = await widget.isarService.getProfile();
-    
-    if (!mounted) return;
     setState(() {
-      _isAuthorized = authorized;
-      if (_profile != null && _profile!.dailyBaseGoal != null) {
-        _dailyGoal = _profile!.dailyBaseGoal!;
+      _todayWater = total;
+      if (profile != null && profile.dailyBaseGoal != null) {
+        _dailyGoal = profile.dailyBaseGoal!;
       }
     });
-
-    await _loadWaterData();
-    if (authorized) {
-      await _syncWithBackend();
-    }
   }
 
-  Future<void> _loadWaterData() async {
-    final total = await widget.isarService.getTodayTotalWater();
-    if (!mounted) return;
-    setState(() => _totalWater = total);
+  void _addWater(double amount) async {
+    await widget.hiveService.addWaterLog(amount);
+    await _loadData();
+    
+    // Test notification logic after adding water
+    await widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal);
   }
 
-  Future<void> _syncWithBackend() async {
-    if (!_isAuthorized) return;
-    setState(() => _isSyncing = true);
-
-    try {
+  Future<void> _checkHealthConnection() async {
+    final bool granted = await widget.healthService.requestPermissions();
+    if (granted) {
       final steps = await widget.healthService.getTodaySteps();
-      final result = await widget.apiService.syncActivity(
-        userId: "user_123",
-        steps: steps,
-        workoutMinutes: 0,
-        weight: _profile?.weight ?? 70.0,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Доступ разрешен! Шагов за сегодня: $steps")),
       );
-
-      if (result != null && mounted) {
-        setState(() {
-          _steps = steps;
-          _dailyGoal = result['daily_goal_ml'] as int;
-          _advice = result['advice'] as String;
-        });
-        await widget.isarService.updateActivityCache(steps, 0, false);
-      }
-    } catch (e) {
-      // Ignore sync errors
-    } finally {
-      if (mounted) setState(() => _isSyncing = false);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Доступ к Health Connect отклонен")),
+      );
     }
-  }
-
-  Future<void> _addWater() async {
-    await widget.isarService.addWater(250);
-    await _loadWaterData();
   }
 
   @override
   Widget build(BuildContext context) {
-    double progress = (_totalWater / _dailyGoal).clamp(0.0, 1.0);
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        title: const Text("Water Reminder"),
         actions: [
           IconButton(
-            icon: _isSyncing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_sync),
-            onPressed: _isSyncing ? null : _syncWithBackend,
-          )
+            icon: const Icon(Icons.health_and_safety),
+            onPressed: _checkHealthConnection,
+            tooltip: "Проверить Samsung Health",
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () => Navigator.pushNamed(context, '/history'),
+          ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _syncWithBackend,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              value: (_todayWater / _dailyGoal).clamp(0.0, 1.0),
+              strokeWidth: 10,
+              backgroundColor: Colors.blue.shade100,
+            ),
+            const SizedBox(height: 30),
+            Text(
+              "${_todayWater.toInt()} / $_dailyGoal ml",
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 40),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.auto_awesome, color: Colors.blue),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(_advice, style: const TextStyle(fontStyle: FontStyle.italic))),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
-        
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    WaterWaveProgress(progress: progress, size: 220),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('$_totalWater', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
-                        Text('of $_dailyGoal ml', style: const TextStyle(color: Colors.black54, fontSize: 16, fontWeight: FontWeight.w500)),
-                      ],
-                    )
-                  ],
-                ),
-                const SizedBox(height: 40),
-        
-                Card(
-                  elevation: 0,
-                  color: Colors.orange.shade50,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: ListTile(
-                    leading: const Icon(Icons.directions_walk, color: Colors.orange, size: 32),
-                    title: Text('$_steps steps', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: const Text('Activity data from sensors'),
-                    trailing: Text('+${((_steps / 1000).floor() * 100)} ml', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                OutlinedButton.icon(
-                  onPressed: () => widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal),
-                  icon: const Icon(Icons.notifications_active),
-                  label: const Text('Test Smart Notification'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
+                _waterButton(250, "Glass"),
+                _waterButton(500, "Bottle"),
               ],
             ),
-          ),
+          ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addWater,
-        label: const Text('Add 250ml', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        icon: const Icon(Icons.local_drink),
-        backgroundColor: Colors.blue.shade600,
-        foregroundColor: Colors.white,
-      ),
+    );
+  }
+
+  Widget _waterButton(double amount, String label) {
+    return Column(
+      children: [
+        ElevatedButton(
+          onPressed: () => _addWater(amount),
+          style: ElevatedButton.styleFrom(
+            shape: const CircleBorder(),
+            padding: const EdgeInsets.all(20),
+          ),
+          child: const Icon(Icons.local_drink),
+        ),
+        const SizedBox(height: 8),
+        Text(label),
+      ],
     );
   }
 }

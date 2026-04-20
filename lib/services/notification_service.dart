@@ -1,15 +1,15 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
-import 'isar_service.dart';
+import 'hive_service.dart';
 import 'health_service.dart';
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
-  final IsarService isarService;
+  final HiveService hiveService;
   final HealthService healthService;
 
-  NotificationService({required this.isarService, required this.healthService});
+  NotificationService({required this.hiveService, required this.healthService});
 
   Future<void> init() async {
     tz_data.initializeTimeZones();
@@ -34,7 +34,7 @@ class NotificationService {
   // Smart check before showing notification
   Future<void> showHydrationReminder({required int dailyGoal}) async {
     // 1. Check progress
-    final currentWater = await isarService.getTodayTotalWater();
+    final currentWater = await hiveService.getTotalWaterToday();
     if (currentWater >= dailyGoal) {
       print('Smart Notification: Goal already reached. Skipping.');
       return;

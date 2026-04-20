@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
-import '../services/isar_service.dart';
+import '../services/hive_service.dart';
+import '../models/user_profile.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  final IsarService isarService;
-  final VoidCallback onComplete;
-
-  const OnboardingScreen({
-    super.key, 
-    required this.isarService, 
-    required this.onComplete
-  });
+  final HiveService hiveService;
+  const OnboardingScreen({super.key, required this.hiveService});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -18,83 +13,47 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _weightController = TextEditingController();
   final _ageController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
 
-  Future<void> _saveAndContinue() async {
-    if (_formKey.currentState!.validate()) {
-      final weight = double.parse(_weightController.text);
-      final age = int.parse(_ageController.text);
-      
-      await widget.isarService.saveProfile(weight, age);
-      widget.onComplete();
+  Future<void> _saveProfile() async {
+    final weight = double.tryParse(_weightController.text) ?? 70.0;
+    final age = int.tryParse(_ageController.text) ?? 25;
+    
+    final profile = UserProfile(
+      weight: weight,
+      age: age,
+      dailyBaseGoal: (weight * 35).toInt(), // Simple formula: 35ml per kg
+    );
+
+    await widget.hiveService.saveProfile(profile);
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/home');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 40),
-                Text(
-                  'Welcome to\nWater Reminder AI',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text('Let\'s personalize your hydration goal.'),
-                const SizedBox(height: 40),
-                
-                TextFormField(
-                  controller: _weightController,
-                  decoration: const InputDecoration(
-                    labelText: 'Weight (kg)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.monitor_weight),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) => value == null || value.isEmpty ? 'Enter weight' : null,
-                ),
-                const SizedBox(height: 20),
-                
-                TextFormField(
-                  controller: _ageController,
-                  decoration: const InputDecoration(
-                    labelText: 'Age',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_today),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) => value == null || value.isEmpty ? 'Enter age' : null,
-                ),
-                
-                const Spacer(),
-                
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _saveAndContinue,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade600,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Get Started', style: TextStyle(fontSize: 18)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
+      appBar: AppBar(title: const Text("Setup Profile")),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _weightController,
+              decoration: const InputDecoration(labelText: "Weight (kg)"),
+              keyboardType: TextInputType.number,
             ),
-          ),
+            TextField(
+              controller: _ageController,
+              decoration: const InputDecoration(labelText: "Age"),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _saveProfile,
+              child: const Text("Save and Start"),
+            ),
+          ],
         ),
       ),
     );
