@@ -54,11 +54,17 @@
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
         <package android:name="com.sec.android.app.shealth" />
+
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
     </queries>
+
 
     <!-- Системные разрешения Android 14+ -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
@@ -69,4 +75,7 @@
     <uses-permission android:name="androidx.health.permission.SLEEP.READ" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
 </manifest>
