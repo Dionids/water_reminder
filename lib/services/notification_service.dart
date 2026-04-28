@@ -1,6 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:flutter/foundation.dart';
 import 'hive_service.dart';
 import 'health_service.dart';
 
@@ -33,37 +33,41 @@ class NotificationService {
 
   // Smart check before showing notification
   Future<void> showHydrationReminder({required int dailyGoal}) async {
-    // 1. Check progress
-    final currentWater = await hiveService.getTotalWaterToday();
-    if (currentWater >= dailyGoal) {
-      print('Smart Notification: Goal already reached. Skipping.');
-      return;
+    try {
+      // 1. Check progress
+      final currentWater = await hiveService.getTotalWaterToday();
+      if (currentWater >= dailyGoal) {
+        debugPrint('Smart Notification: Goal already reached. Skipping.');
+        return;
+      }
+
+      // 2. Check sleep status
+      final isAsleep = await healthService.isUserAsleep();
+      if (isAsleep) {
+        debugPrint('Smart Notification: User is asleep. Skipping.');
+        return;
+      }
+
+      // 3. Show notification
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'hydration_id',
+        'Hydration Reminders',
+        channelDescription: 'Reminds you to drink water based on your activity',
+        importance: Importance.high,
+        priority: Priority.high,
+      );
+
+      const NotificationDetails details = NotificationDetails(android: androidDetails);
+
+      await _notifications.show(
+        0,
+        'Time to drink water! 💧',
+        'You have reached only ${((currentWater / dailyGoal) * 100).toInt()}% of your goal.',
+        details,
+      );
+    } catch (e) {
+      debugPrint('Notification Service Error: $e');
     }
-
-    // 2. Check sleep status
-    final isAsleep = await healthService.isUserAsleep();
-    if (isAsleep) {
-      print('Smart Notification: User is asleep. Skipping.');
-      return;
-    }
-
-    // 3. Show notification
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'hydration_id',
-      'Hydration Reminders',
-      channelDescription: 'Reminds you to drink water based on your activity',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-
-    const NotificationDetails details = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      0,
-      'Time to drink water! 💧',
-      'You have reached only ${((currentWater / dailyGoal) * 100).toInt()}% of your goal.',
-      details,
-    );
   }
 
   Future<void> requestPermissions() async {

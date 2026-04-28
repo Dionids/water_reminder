@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'services/hive_service.dart';
 import 'services/health_service.dart';
@@ -11,7 +10,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tz.initializeTimeZones();
   
-  // Initialize Services
   final hiveService = HiveService();
   await hiveService.init();
   
@@ -43,7 +41,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check if profile exists to decide initial route
     final profile = hiveService.getProfile();
     final initialRoute = profile == null ? '/onboarding' : '/home';
 
@@ -86,6 +83,13 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   double _todayWater = 0;
   int _dailyGoal = 2000;
+  
+  // Новые данные из Health Connect
+  int _steps = 0;
+  double _weight = 0.0;
+  double _calories = 0.0;
+  double _distance = 0.0;
+  int _heartRate = 0;
 
   @override
   void initState() {
@@ -108,17 +112,32 @@ class _MyHomePageState extends State<MyHomePage> {
   void _addWater(double amount) async {
     await widget.hiveService.addWaterLog(amount);
     await _loadData();
-    
-    // Test notification logic after adding water
     await widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal);
   }
 
-  Future<void> _checkHealthConnection() async {
+  Future<void> _syncHealthData() async {
     final bool granted = await widget.healthService.requestPermissions();
+    if (!mounted) return;
+
     if (granted) {
       final steps = await widget.healthService.getTodaySteps();
+      final weight = await widget.healthService.getLatestWeight();
+      final calories = await widget.healthService.getTodayCalories();
+      final distance = await widget.healthService.getTodayDistance();
+      final heartRate = await widget.healthService.getLatestHeartRate();
+
+      if (!mounted) return;
+
+      setState(() {
+        _steps = steps;
+        _weight = weight;
+        _calories = calories;
+        _distance = distance;
+        _heartRate = heartRate;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Доступ разрешен! Шагов за сегодня: $steps")),
+        const SnackBar(content: Text("Данные Samsung Health синхронизированы!")),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -134,9 +153,9 @@ class _MyHomePageState extends State<MyHomePage> {
         title: const Text("Water Reminder"),
         actions: [
           IconButton(
-            icon: const Icon(Icons.health_and_safety),
-            onPressed: _checkHealthConnection,
-            tooltip: "Проверить Samsung Health",
+            icon: const Icon(Icons.sync),
+            onPressed: _syncHealthData,
+            tooltip: "Синхронизировать с Samsung Health",
           ),
           IconButton(
             icon: const Icon(Icons.history),
@@ -144,27 +163,103 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              _buildWaterProgress(),
+              const SizedBox(height: 40),
+              _buildWaterButtons(),
+              const SizedBox(height: 40),
+              const Divider(),
+              const SizedBox(height: 20),
+              _buildHealthStats(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWaterProgress() {
+    return Column(
+      children: [
+        SizedBox(
+          width: 150,
+          height: 150,
+          child: CircularProgressIndicator(
+            value: (_todayWater / _dailyGoal).clamp(0.0, 1.0),
+            strokeWidth: 12,
+            backgroundColor: Colors.blue.shade100,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          "${_todayWater.toInt()} / $_dailyGoal ml",
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWaterButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _waterButton(250, "Glass"),
+        _waterButton(500, "Bottle"),
+      ],
+    );
+  }
+
+  Widget _buildHealthStats() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Samsung Health Stats",
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 16),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 2.5,
           children: [
-            CircularProgressIndicator(
-              value: (_todayWater / _dailyGoal).clamp(0.0, 1.0),
-              strokeWidth: 10,
-              backgroundColor: Colors.blue.shade100,
-            ),
-            const SizedBox(height: 30),
-            Text(
-              "${_todayWater.toInt()} / $_dailyGoal ml",
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 40),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _waterButton(250, "Glass"),
-                _waterButton(500, "Bottle"),
-              ],
+            _statCard(Icons.directions_walk, "Steps", "$_steps"),
+            _statCard(Icons.monitor_weight, "Weight", "${_weight.toStringAsFixed(1)} kg"),
+            _statCard(Icons.local_fire_department, "Calories", "${_calories.toInt()} kcal"),
+            _statCard(Icons.map, "Distance", "${(_distance / 1000).toStringAsFixed(2)} km"),
+            _statCard(Icons.favorite, "Heart Rate", "$_heartRate bpm"),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _statCard(IconData icon, String label, String value) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.blue, size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ),
           ],
         ),

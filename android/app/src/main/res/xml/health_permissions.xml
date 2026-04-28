@@ -2,4 +2,8 @@
 <health-permissions>
     <read-permission name="android.permission.health.READ_STEPS" />
     <read-permission name="android.permission.health.READ_SLEEP" />
+    <read-permission name="android.permission.health.READ_WEIGHT" />
+    <read-permission name="android.permission.health.READ_HEART_RATE" />
+    <read-permission name="android.permission.health.READ_ACTIVE_ENERGY_BURNED" />
+    <read-permission name="android.permission.health.READ_DISTANCE" />
 </health-permissions>

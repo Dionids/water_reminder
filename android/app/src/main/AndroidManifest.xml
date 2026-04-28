@@ -24,14 +24,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Android 14 Rationale -->
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
-        <!-- Алиас для Health Connect Settings -->
         <activity-alias
             android:name=".ViewPermissionUsageActivity"
             android:exported="true"
@@ -43,7 +41,6 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Обязательная декларация разрешений для Android 14 -->
         <meta-data android:name="health_permissions" android:resource="@xml/health_permissions" />
 
         <meta-data
@@ -54,28 +51,20 @@
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
         <package android:name="com.sec.android.app.shealth" />
-
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-
-        <intent>
-            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-        </intent>
     </queries>
 
-
-    <!-- Системные разрешения Android 14+ -->
+    <!-- Permissions Health Connect -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
-
-    <!-- Разрешения для старых версий -->
-    <uses-permission android:name="androidx.health.permission.STEPS.READ" />
-    <uses-permission android:name="androidx.health.permission.SLEEP.READ" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_ENERGY_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-
 </manifest>
