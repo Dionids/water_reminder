@@ -1,5 +1,4 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:flutter/foundation.dart';
 import 'hive_service.dart';
 import 'health_service.dart';
@@ -12,8 +11,6 @@ class NotificationService {
   NotificationService({required this.hiveService, required this.healthService});
 
   Future<void> init() async {
-    tz_data.initializeTimeZones();
-    
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
         

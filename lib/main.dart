@@ -123,7 +123,7 @@ class _MyHomePageState extends State<MyHomePage> {
       final steps = await widget.healthService.getTodaySteps();
       final weight = await widget.healthService.getLatestWeight();
       final calories = await widget.healthService.getTodayCalories();
-      final distance = await widget.healthService.getTodayDistance();
+      final distance = await widget.healthService.getTodayDistance(fallbackSteps: steps);
       final heartRate = await widget.healthService.getLatestHeartRate();
 
       if (!mounted) return;
@@ -137,7 +137,7 @@ class _MyHomePageState extends State<MyHomePage> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Данные Samsung Health синхронизированы!")),
+        const SnackBar(content: Text("Данные Health Connect синхронизированы!")),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -219,7 +219,7 @@ class _MyHomePageState extends State<MyHomePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Samsung Health Stats",
+          "Health Connect Stats",
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 16),
@@ -233,7 +233,7 @@ class _MyHomePageState extends State<MyHomePage> {
           children: [
             _statCard(Icons.directions_walk, "Steps", "$_steps"),
             _statCard(Icons.monitor_weight, "Weight", "${_weight.toStringAsFixed(1)} kg"),
-            _statCard(Icons.local_fire_department, "Calories", "${_calories.toInt()} kcal"),
+            _statCard(Icons.local_fire_department, "Exercise Calories", "${_calories.toInt()} kcal"),
             _statCard(Icons.map, "Distance", "${(_distance / 1000).toStringAsFixed(2)} km"),
             _statCard(Icons.favorite, "Heart Rate", "$_heartRate bpm"),
           ],

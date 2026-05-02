@@ -41,7 +41,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             trailing: IconButton(
               icon: const Icon(Icons.delete),
               onPressed: () async {
-                await widget.hiveService.deleteLog(index);
+                // Используем HiveObject.delete() для удаления конкретной записи,
+                // чтобы избежать удаления не того лога из-за сортировки.
+                await log.delete();
                 _loadLogs();
               },
             ),

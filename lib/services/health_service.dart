@@ -20,8 +20,7 @@ class HealthService {
       HealthDataType.STEPS,
       HealthDataType.WEIGHT,
       HealthDataType.HEART_RATE,
-      HealthDataType.ACTIVE_ENERGY_BURNED,
-      HealthDataType.TOTAL_CALORIES_BURNED, // Добавили общий расход
+      HealthDataType.TOTAL_CALORIES_BURNED,
       HealthDataType.DISTANCE_DELTA,
       HealthDataType.SLEEP_ASLEEP,
     ];
@@ -82,21 +81,20 @@ class HealthService {
     }
   }
 
+  /// Получает калории от упражнений (TotalCaloriesBurnedRecord в Health Connect / Samsung Health)
   Future<double> getTodayCalories() async {
     await _configure();
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     try {
-      // Пытаемся получить и активные, и общие калории
+      // Для Samsung Health используем только TOTAL_CALORIES_BURNED, 
+      // так как это соответствует Exercise Calories
       final data = await _health.getHealthDataFromTypes(
-        types: [
-          HealthDataType.ACTIVE_ENERGY_BURNED,
-          HealthDataType.TOTAL_CALORIES_BURNED
-        ],
+        types: [HealthDataType.TOTAL_CALORIES_BURNED],
         startTime: startOfDay,
         endTime: now,
       );
-      debugPrint('Calories data points: ${data.length}');
+      debugPrint('Exercise Calories data points: ${data.length}');
       double total = 0.0;
       for (var p in data) {
         total += _extractValue(p);
@@ -107,7 +105,7 @@ class HealthService {
     }
   }
 
-  Future<double> getTodayDistance() async {
+  Future<double> getTodayDistance({int? fallbackSteps}) async {
     await _configure();
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
@@ -117,13 +115,21 @@ class HealthService {
         startTime: startOfDay,
         endTime: now,
       );
-      debugPrint('Distance data points: ${data.length}');
+      
       double total = 0.0;
       for (var p in data) {
         total += _extractValue(p);
       }
+      
+      if (total == 0 && fallbackSteps != null) {
+        debugPrint('Distance is 0, using fallback calculation from steps');
+        return fallbackSteps * 0.75;
+      }
+      
+      debugPrint('Distance data points: ${data.length}, total: $total');
       return total;
     } catch (e) {
+      if (fallbackSteps != null) return fallbackSteps * 0.75;
       return 0.0;
     }
   }
@@ -164,7 +170,17 @@ class HealthService {
         startTime: startOfCheck,
         endTime: now,
       );
-      return data.isNotEmpty;
+      
+      if (data.isEmpty) return false;
+      
+      // Проверяем, попадает ли текущее время в интервал какой-либо записи о сне
+      for (var p in data) {
+        if (now.isAfter(p.dateFrom) && now.isBefore(p.dateTo)) {
+          return true;
+        }
+      }
+      
+      return false;
     } catch (e) {
       return false;
     }
