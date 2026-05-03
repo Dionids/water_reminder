@@ -191,39 +191,44 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     await widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal);
   }
 
+  /// [silent] = true — авто-синхронизация (без диалога разрешений, без SnackBar).
+  /// [silent] = false — ручная синхронизация кнопкой (показывает диалог и SnackBar).
   Future<void> _syncHealthData({bool silent = false}) async {
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
 
     try {
-      final bool granted = await widget.healthService.requestPermissions();
+      // Авто-sync: только проверяем статус без диалога.
+      // Ручной sync: запрашиваем разрешения если нужно.
+      final bool granted = silent
+          ? await widget.healthService.checkPermissions()
+          : await widget.healthService.requestPermissions();
+
       if (!mounted) return;
       if (!granted) {
         if (!silent) _showSnackBar('Доступ к Health Connect отклонён');
         return;
       }
 
-      final results = await Future.wait([
-        widget.healthService.getTodaySteps(),
-        widget.healthService.getLatestWeight(),
-        widget.healthService.getTodayCalories(),
-        widget.healthService.getLatestHeartRate(),
-      ]);
-
-      final steps     = results[0] as int;
-      final weight    = results[1] as double;
-      final calories  = results[2] as double;
-      final heartRate = results[3] as int;
-      final distance  = await widget.healthService.getTodayDistance(fallbackSteps: steps);
-      final workout   = await widget.healthService.getTodayWorkoutSummary(avgHeartRate: heartRate);
-
+      // Все данные — одним вызовом (параллельно внутри)
+      final data = await widget.healthService.fetchAllTodayData();
       if (!mounted) return;
+
+      final steps           = data['steps']            as int;
+      final weight          = data['weight']           as double;
+      final calories        = data['calories']         as double;
+      final heartRate       = data['heartRate']        as int;
+      final distance        = data['distance']         as double;
+      final workoutMinutes  = data['workoutMinutes']   as int;
+      final workoutIntensity = data['workoutIntensity'] as WorkoutIntensity;
+      final activityNames   = data['activityNames']    as List<String>;
+
       setState(() {
         _steps = steps; _weight = weight; _calories = calories;
         _distance = distance; _heartRate = heartRate;
-        _workoutMinutes = workout.totalMinutes;
-        _workoutIntensity = workout.dominantIntensity;
-        _activityNames = workout.activityNames;
+        _workoutMinutes = workoutMinutes;
+        _workoutIntensity = workoutIntensity;
+        _activityNames = activityNames;
       });
 
       final profile = widget.hiveService.getProfile();
@@ -233,15 +238,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         userId: profile?.id ?? 'user_local',
         steps: steps,
         weightKg: effectiveWeight,
-        workoutMinutes: workout.totalMinutes,
-        workoutIntensity: workout.dominantIntensity,
-        activityNames: workout.activityNames,
+        workoutMinutes: workoutMinutes,
+        workoutIntensity: workoutIntensity,
+        activityNames: activityNames,
       );
 
       if (!mounted) return;
 
       if (serverResponse != null) {
-        final newGoal = serverResponse['daily_goal_ml'] as int? ?? _dailyGoal;
+        final newGoal   = serverResponse['daily_goal_ml'] as int? ?? _dailyGoal;
         final breakdown = serverResponse['breakdown'] as Map<String, dynamic>?;
         if (profile != null) {
           profile.dailyBaseGoal = newGoal;
@@ -249,20 +254,26 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           await widget.hiveService.saveProfile(profile);
         }
         setState(() {
-          _dailyGoal = newGoal;
-          _baseGoalMl = breakdown?['base_ml'] as int? ?? 0;
-          _stepsBonusMl = breakdown?['steps_ml'] as int? ?? 0;
+          _dailyGoal      = newGoal;
+          _baseGoalMl     = breakdown?['base_ml']    as int? ?? 0;
+          _stepsBonusMl   = breakdown?['steps_ml']   as int? ?? 0;
           _workoutBonusMl = breakdown?['workout_ml'] as int? ?? 0;
-          _serverAdvice = serverResponse['advice'] as String? ?? '';
-          _lastSyncTime = DateTime.now();
+          _serverAdvice   = serverResponse['advice'] as String? ?? '';
+          _lastSyncTime   = DateTime.now();
         });
         _animateProgress(_todayWater / newGoal);
         if (!silent) _showSnackBar('Норма обновлена: $newGoal мл 💧');
       } else {
+        // Офлайн — считаем локально, но время синхронизации всё равно обновляем
         _recalculateGoalLocally(
           weightKg: effectiveWeight, steps: steps,
-          workoutMinutes: workout.totalMinutes, intensity: workout.dominantIntensity,
+          workoutMinutes: workoutMinutes, intensity: workoutIntensity,
         );
+        setState(() => _lastSyncTime = DateTime.now());
+        if (profile != null) {
+          profile.lastSync = DateTime.now();
+          await widget.hiveService.saveProfile(profile);
+        }
         if (!silent) _showSnackBar('Синхронизировано (офлайн)');
       }
     } finally {

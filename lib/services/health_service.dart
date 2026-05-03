@@ -3,10 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Интенсивность тренировки — определяет бонус к норме воды
 enum WorkoutIntensity { none, low, medium, high, extreme }
 
-/// Сводка по тренировкам за день
 class WorkoutSummaryData {
   final int totalMinutes;
   final WorkoutIntensity dominantIntensity;
@@ -22,6 +20,11 @@ class WorkoutSummaryData {
 class HealthService {
   final Health _health = Health();
   bool _configured = false;
+  // Кэш статуса разрешений — не спрашиваем каждые 30 минут
+  bool? _permissionsGranted;
+  DateTime? _permissionsCheckedAt;
+
+  static const _permissionsCacheDuration = Duration(minutes: 10);
 
   Future<void> _configure() async {
     if (_configured) return;
@@ -29,21 +32,21 @@ class HealthService {
     _configured = true;
   }
 
+  static const _types = [
+    HealthDataType.STEPS,
+    HealthDataType.WEIGHT,
+    HealthDataType.HEART_RATE,
+    HealthDataType.TOTAL_CALORIES_BURNED,
+    HealthDataType.DISTANCE_DELTA,
+    HealthDataType.SLEEP_ASLEEP,
+    HealthDataType.WORKOUT,
+  ];
+
+  /// Запрашивает разрешения (показывает диалог).
+  /// Вызывать только явно — при первом запуске или из настроек.
   Future<bool> requestPermissions() async {
     await _configure();
-
-    final types = [
-      HealthDataType.STEPS,
-      HealthDataType.WEIGHT,
-      HealthDataType.HEART_RATE,
-      HealthDataType.TOTAL_CALORIES_BURNED,
-      HealthDataType.DISTANCE_DELTA,
-      HealthDataType.SLEEP_ASLEEP,
-      HealthDataType.WORKOUT,
-    ];
-
-    final permissions = List.filled(types.length, HealthDataAccess.READ);
-
+    final permissions = List.filled(_types.length, HealthDataAccess.READ);
     try {
       if (Platform.isAndroid) {
         await Permission.activityRecognition.request();
@@ -53,17 +56,80 @@ class HealthService {
           return false;
         }
       }
-
-      final bool authorized = await _health.requestAuthorization(
-        types,
-        permissions: permissions,
-      );
-      debugPrint('Health Auth Status: $authorized');
-      return authorized;
+      final granted = await _health.requestAuthorization(_types, permissions: permissions);
+      _permissionsGranted = granted;
+      _permissionsCheckedAt = DateTime.now();
+      debugPrint('Health permissions granted: $granted');
+      return granted;
     } catch (e) {
-      debugPrint('Health Service Authorization Error: $e');
+      debugPrint('Health requestPermissions error: $e');
       return false;
     }
+  }
+
+  /// Проверяет статус без показа диалога — для авто-синхронизации.
+  /// Использует кэш чтобы не дёргать Health Connect лишний раз.
+  Future<bool> checkPermissions() async {
+    await _configure();
+
+    // Кэш актуален — возвращаем без запроса
+    final cached = _permissionsGranted;
+    final checkedAt = _permissionsCheckedAt;
+    if (cached != null && checkedAt != null &&
+        DateTime.now().difference(checkedAt) < _permissionsCacheDuration) {
+      return cached;
+    }
+
+    try {
+      final granted = await _health.hasPermissions(_types) ?? false;
+      _permissionsGranted = granted;
+      _permissionsCheckedAt = DateTime.now();
+      debugPrint('Health permissions check: $granted');
+      return granted;
+    } catch (e) {
+      debugPrint('Health checkPermissions error: $e');
+      return _permissionsGranted ?? false;
+    }
+  }
+
+  /// Читает все данные за сегодня параллельно.
+  /// Возвращает Map с результатами — удобно для одного await.
+  Future<Map<String, dynamic>> fetchAllTodayData() async {
+    await _configure();
+
+    // Все независимые запросы — параллельно
+    final results = await Future.wait([
+      getTodaySteps(),
+      getLatestWeight(),
+      getTodayCalories(),
+      getLatestHeartRate(),
+      getTodayDistance(),
+    ]);
+
+    final steps     = results[0] as int;
+    final weight    = results[1] as double;
+    final calories  = results[2] as double;
+    final heartRate = results[3] as int;
+    var   distance  = results[4] as double;
+
+    // Fallback дистанции через шаги — тоже параллельно было бы, но нужны шаги
+    if (distance == 0 && steps > 0) {
+      distance = steps * 0.75;
+    }
+
+    // Тренировки — зависят от пульса, идут последними
+    final workout = await getTodayWorkoutSummary(avgHeartRate: heartRate);
+
+    return {
+      'steps':            steps,
+      'weight':           weight,
+      'calories':         calories,
+      'heartRate':        heartRate,
+      'distance':         distance,
+      'workoutMinutes':   workout.totalMinutes,
+      'workoutIntensity': workout.dominantIntensity,
+      'activityNames':    workout.activityNames,
+    };
   }
 
   Future<int> getTodaySteps() async {
@@ -71,9 +137,7 @@ class HealthService {
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     try {
-      final steps = await _health.getTotalStepsInInterval(startOfDay, now);
-      debugPrint('Steps: $steps');
-      return steps ?? 0;
+      return await _health.getTotalStepsInInterval(startOfDay, now) ?? 0;
     } catch (e) {
       return 0;
     }
@@ -82,11 +146,10 @@ class HealthService {
   Future<double> getLatestWeight() async {
     await _configure();
     final now = DateTime.now();
-    final start = now.subtract(const Duration(days: 365));
     try {
       final data = await _health.getHealthDataFromTypes(
         types: [HealthDataType.WEIGHT],
-        startTime: start,
+        startTime: now.subtract(const Duration(days: 365)),
         endTime: now,
       );
       if (data.isEmpty) return 0.0;
@@ -106,11 +169,7 @@ class HealthService {
         startTime: startOfDay,
         endTime: now,
       );
-      double total = 0.0;
-      for (var p in data) {
-        total += _extractValue(p);
-      }
-      return total;
+      return data.fold(0.0, (sum, p) => sum + _extractValue(p));
     } catch (e) {
       return 0.0;
     }
@@ -126,13 +185,8 @@ class HealthService {
         startTime: startOfDay,
         endTime: now,
       );
-      double total = 0.0;
-      for (var p in data) {
-        total += _extractValue(p);
-      }
-      if (total == 0 && fallbackSteps != null) {
-        return fallbackSteps * 0.75;
-      }
+      final total = data.fold(0.0, (sum, p) => sum + _extractValue(p));
+      if (total == 0 && fallbackSteps != null) return fallbackSteps * 0.75;
       return total;
     } catch (e) {
       if (fallbackSteps != null) return fallbackSteps * 0.75;
@@ -143,11 +197,10 @@ class HealthService {
   Future<int> getLatestHeartRate() async {
     await _configure();
     final now = DateTime.now();
-    final start = now.subtract(const Duration(hours: 48));
     try {
       final data = await _health.getHealthDataFromTypes(
         types: [HealthDataType.HEART_RATE],
-        startTime: start,
+        startTime: now.subtract(const Duration(hours: 48)),
         endTime: now,
       );
       if (data.isEmpty) return 0;
@@ -157,10 +210,70 @@ class HealthService {
     }
   }
 
-  /// Классификация по MET (стандарт ВОЗ) — UPPER_CASE константы health ^13.x
+  Future<WorkoutSummaryData> getTodayWorkoutSummary({int avgHeartRate = 0}) async {
+    await _configure();
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+
+    try {
+      final data = await _health.getHealthDataFromTypes(
+        types: [HealthDataType.WORKOUT],
+        startTime: startOfDay,
+        endTime: now,
+      );
+
+      if (data.isEmpty) {
+        return const WorkoutSummaryData(
+          totalMinutes: 0,
+          dominantIntensity: WorkoutIntensity.none,
+          activityNames: [],
+        );
+      }
+
+      int totalMinutes = 0;
+      final intensities = <WorkoutIntensity>[];
+      final names = <String>[];
+
+      for (final point in data) {
+        totalMinutes += point.dateTo.difference(point.dateFrom).inMinutes;
+
+        WorkoutIntensity intensity;
+        String activityName;
+
+        if (point.value is WorkoutHealthValue) {
+          final wv = point.value as WorkoutHealthValue;
+          activityName = _formatActivityName(wv.workoutActivityType);
+          intensity = _intensityFromActivityType(wv.workoutActivityType);
+          if (wv.workoutActivityType == HealthWorkoutActivityType.OTHER && avgHeartRate > 0) {
+            intensity = _intensityFromHeartRate(avgHeartRate);
+          }
+        } else {
+          activityName = 'Тренировка';
+          intensity = avgHeartRate > 0 ? _intensityFromHeartRate(avgHeartRate) : WorkoutIntensity.medium;
+        }
+
+        intensities.add(intensity);
+        if (!names.contains(activityName)) names.add(activityName);
+      }
+
+      final dominant = intensities.reduce((a, b) => a.index > b.index ? a : b);
+      return WorkoutSummaryData(
+        totalMinutes: totalMinutes,
+        dominantIntensity: dominant,
+        activityNames: names,
+      );
+    } catch (e) {
+      debugPrint('Workout fetch error: $e');
+      return const WorkoutSummaryData(
+        totalMinutes: 0,
+        dominantIntensity: WorkoutIntensity.none,
+        activityNames: [],
+      );
+    }
+  }
+
   WorkoutIntensity _intensityFromActivityType(HealthWorkoutActivityType type) {
     switch (type) {
-      // Низкая интенсивность — MET 1.5–3
       case HealthWorkoutActivityType.WALKING:
       case HealthWorkoutActivityType.YOGA:
       case HealthWorkoutActivityType.MIND_AND_BODY:
@@ -172,7 +285,6 @@ class HealthService {
       case HealthWorkoutActivityType.GUIDED_BREATHING:
         return WorkoutIntensity.low;
 
-      // Средняя интенсивность — MET 3–6
       case HealthWorkoutActivityType.HIKING:
       case HealthWorkoutActivityType.DANCING:
       case HealthWorkoutActivityType.SOCIAL_DANCE:
@@ -187,7 +299,6 @@ class HealthService {
       case HealthWorkoutActivityType.ARCHERY:
         return WorkoutIntensity.medium;
 
-      // Высокая интенсивность — MET 6–9
       case HealthWorkoutActivityType.RUNNING:
       case HealthWorkoutActivityType.RUNNING_TREADMILL:
       case HealthWorkoutActivityType.BIKING:
@@ -213,7 +324,6 @@ class HealthService {
       case HealthWorkoutActivityType.SNOWBOARDING:
         return WorkoutIntensity.high;
 
-      // Очень высокая — MET > 9
       case HealthWorkoutActivityType.HIGH_INTENSITY_INTERVAL_TRAINING:
       case HealthWorkoutActivityType.BOXING:
       case HealthWorkoutActivityType.KICKBOXING:
@@ -228,14 +338,12 @@ class HealthService {
       case HealthWorkoutActivityType.MIXED_CARDIO:
         return WorkoutIntensity.extreme;
 
-      // OTHER — Samsung Health fallback на пульс
       case HealthWorkoutActivityType.OTHER:
       default:
         return WorkoutIntensity.medium;
     }
   }
 
-  /// Fallback: зоны ЧСС
   WorkoutIntensity _intensityFromHeartRate(int bpm) {
     if (bpm < 100) return WorkoutIntensity.low;
     if (bpm < 130) return WorkoutIntensity.medium;
@@ -244,83 +352,10 @@ class HealthService {
   }
 
   String _formatActivityName(HealthWorkoutActivityType type) {
-    final words = type.name.split('_').map((w) {
+    return type.name.split('_').map((w) {
       if (w.isEmpty) return w;
       return w[0].toUpperCase() + w.substring(1).toLowerCase();
     }).join(' ');
-    return words;
-  }
-
-  Future<WorkoutSummaryData> getTodayWorkoutSummary({int avgHeartRate = 0}) async {
-    await _configure();
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-
-    try {
-      final data = await _health.getHealthDataFromTypes(
-        types: [HealthDataType.WORKOUT],
-        startTime: startOfDay,
-        endTime: now,
-      );
-
-      debugPrint('Workouts today: ${data.length}');
-
-      if (data.isEmpty) {
-        return const WorkoutSummaryData(
-          totalMinutes: 0,
-          dominantIntensity: WorkoutIntensity.none,
-          activityNames: [],
-        );
-      }
-
-      int totalMinutes = 0;
-      final List<WorkoutIntensity> intensities = [];
-      final List<String> names = [];
-
-      for (final point in data) {
-        final durationMinutes = point.dateTo.difference(point.dateFrom).inMinutes;
-        totalMinutes += durationMinutes;
-
-        WorkoutIntensity intensity;
-        String activityName;
-
-        if (point.value is WorkoutHealthValue) {
-          final wv = point.value as WorkoutHealthValue;
-          activityName = _formatActivityName(wv.workoutActivityType);
-          intensity = _intensityFromActivityType(wv.workoutActivityType);
-
-          // Fallback на пульс для Samsung OTHER
-          if (wv.workoutActivityType == HealthWorkoutActivityType.OTHER &&
-              avgHeartRate > 0) {
-            intensity = _intensityFromHeartRate(avgHeartRate);
-          }
-        } else {
-          activityName = 'Тренировка';
-          intensity = avgHeartRate > 0
-              ? _intensityFromHeartRate(avgHeartRate)
-              : WorkoutIntensity.medium;
-        }
-
-        intensities.add(intensity);
-        if (!names.contains(activityName)) names.add(activityName);
-        debugPrint('Workout: $activityName | $durationMinutes мин | $intensity');
-      }
-
-      final dominant = intensities.reduce((a, b) => a.index > b.index ? a : b);
-
-      return WorkoutSummaryData(
-        totalMinutes: totalMinutes,
-        dominantIntensity: dominant,
-        activityNames: names,
-      );
-    } catch (e) {
-      debugPrint('Workout fetch error: $e');
-      return const WorkoutSummaryData(
-        totalMinutes: 0,
-        dominantIntensity: WorkoutIntensity.none,
-        activityNames: [],
-      );
-    }
   }
 
   double _extractValue(HealthDataPoint p) {
@@ -332,18 +367,14 @@ class HealthService {
   Future<bool> isUserAsleep() async {
     await _configure();
     final now = DateTime.now();
-    final startOfCheck = now.subtract(const Duration(hours: 24));
     try {
       final data = await _health.getHealthDataFromTypes(
         types: [HealthDataType.SLEEP_ASLEEP],
-        startTime: startOfCheck,
+        startTime: now.subtract(const Duration(hours: 24)),
         endTime: now,
       );
       if (data.isEmpty) return false;
-      for (var p in data) {
-        if (now.isAfter(p.dateFrom) && now.isBefore(p.dateTo)) return true;
-      }
-      return false;
+      return data.any((p) => now.isAfter(p.dateFrom) && now.isBefore(p.dateTo));
     } catch (e) {
       return false;
     }

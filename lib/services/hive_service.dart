@@ -51,10 +51,7 @@ class HiveService {
     return box.values.toList()..sort((a, b) => b.date.compareTo(a.date));
   }
 
-  Future<void> deleteLog(int index) async {
-    final box = Hive.box<WaterLog>(waterBoxName);
-    await box.deleteAt(index);
-  }
+  // Удаление выполняется через log.delete() напрямую на объекте HiveObject
 
   // --- User Profile ---
 
