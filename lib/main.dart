@@ -8,6 +8,7 @@ import 'services/hive_service.dart';
 import 'services/health_service.dart';
 import 'services/notification_service.dart';
 import 'services/api_service.dart';
+import 'services/sync_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/profile_screen.dart';
@@ -23,6 +24,10 @@ void main() async {
 
   final hiveService = HiveService();
   await hiveService.init();
+
+  // Инициализируем WorkManager для фоновой синхронизации
+  await SyncService.initWorkManager();
+  await SyncService.registerBackgroundSync();
 
   final healthService = HealthService();
   final notificationService = NotificationService(
@@ -129,6 +134,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   String _serverAdvice = '';
   DateTime? _lastSyncTime;
 
+  SyncState get _syncState => SyncState(lastSyncTime: _lastSyncTime, isSyncing: _isSyncing);
+
+  // Таймер для обновления метки времени синхронизации в UI
+  Timer? _uiRefreshTimer;
   Timer? _autoSyncTimer;
   static const _autoSyncInterval = Duration(minutes: 30);
 
@@ -155,11 +164,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _autoSyncTimer = Timer.periodic(_autoSyncInterval, (_) {
       _syncHealthData(silent: true);
     });
+    // Обновляем метку времени каждую минуту ("5 мин назад" → "6 мин назад")
+    _uiRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _autoSyncTimer?.cancel();
+    _uiRefreshTimer?.cancel();
     _progressController.dispose();
     super.dispose();
   }
@@ -194,6 +208,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   /// [silent] = true — авто-синхронизация (без диалога разрешений, без SnackBar).
   /// [silent] = false — ручная синхронизация кнопкой (показывает диалог и SnackBar).
   Future<void> _syncHealthData({bool silent = false}) async {
+    // Дедупликация: не синхронизируем если прошло меньше 5 минут
+    // (исключение — ручной запуск всегда разрешён)
+    if (silent && !_syncState.canSync) {
+      debugPrint('Sync пропущен: слишком рано (последняя: ${_syncState.label})');
+      return;
+    }
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
 
@@ -312,13 +332,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  String _syncLabel() {
-    if (_lastSyncTime == null) return 'Не синхронизировано';
-    final diff = DateTime.now().difference(_lastSyncTime!);
-    if (diff.inMinutes < 1) return 'Только что';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} мин назад';
-    return '${diff.inHours} ч назад';
-  }
+  // _syncLabel теперь делегируется SyncState.label
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +353,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22),
             ),
             actions: [
+              // Индикатор свежести данных
+              _SyncStatusChip(syncState: _syncState),
               if (_isSyncing)
                 const Padding(
                   padding: EdgeInsets.all(16),
@@ -379,7 +395,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   todayWater: _todayWater,
                   dailyGoal: _dailyGoal,
                   pct: pct,
-                  syncLabel: _syncLabel(),
+                  syncState: _syncState,
                   onAdd: _addWater,
                 ),
 
@@ -430,13 +446,13 @@ class _HeroWaterCard extends StatelessWidget {
   final double todayWater;
   final int dailyGoal;
   final int pct;
-  final String syncLabel;
+  final SyncState syncState;
   final Future<void> Function(double) onAdd;
 
   const _HeroWaterCard({
     required this.progress, required this.todayWater,
     required this.dailyGoal, required this.pct,
-    required this.syncLabel, required this.onAdd,
+    required this.syncState, required this.onAdd,
   });
 
   @override
@@ -555,13 +571,7 @@ class _HeroWaterCard extends StatelessWidget {
             ),
 
             const SizedBox(height: 12),
-            Text(
-              '🔄 $syncLabel',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.65),
-                fontSize: 12,
-              ),
-            ),
+            _SyncFooter(syncState: syncState),
           ],
         ),
       ),
@@ -821,6 +831,108 @@ class _StatTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Индикатор свежести в AppBar — цветная точка + метка
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SyncStatusChip extends StatelessWidget {
+  final SyncState syncState;
+  const _SyncStatusChip({required this.syncState});
+
+  @override
+  Widget build(BuildContext context) {
+    if (syncState.isSyncing) return const SizedBox.shrink();
+
+    final Color dotColor;
+    final String tooltip;
+
+    switch (syncState.freshness) {
+      case SyncFreshness.fresh:
+        dotColor = const Color(0xFF43A047); // зелёный
+        tooltip = 'Данные актуальны: ${syncState.label}';
+      case SyncFreshness.aging:
+        dotColor = const Color(0xFFFFA000); // жёлтый
+        tooltip = 'Данные устаревают: ${syncState.label}';
+      case SyncFreshness.stale:
+        dotColor = const Color(0xFFE53935); // красный
+        tooltip = 'Данные устарели: ${syncState.label}';
+      case SyncFreshness.unknown:
+        dotColor = Colors.grey;
+        tooltip = 'Не синхронизировано';
+    }
+
+    return Tooltip(
+      message: tooltip,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8, height: 8,
+              decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              syncState.label,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Нижняя строка Hero карточки — с предупреждением если данные устарели
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SyncFooter extends StatelessWidget {
+  final SyncState syncState;
+  const _SyncFooter({required this.syncState});
+
+  @override
+  Widget build(BuildContext context) {
+    final isStale = syncState.isStale;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: isStale
+          ? Container(
+              key: const ValueKey('stale'),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.4)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Colors.white, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Данные устарели · ${syncState.label}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            )
+          : Text(
+              key: const ValueKey('fresh'),
+              '🔄 ${syncState.label}',
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.65), fontSize: 12),
+            ),
     );
   }
 }
