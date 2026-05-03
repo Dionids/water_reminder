@@ -153,7 +153,7 @@ class _WeekChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxVal = last7Days.map((e) => e.value).fold(0.0, (a, b) => a > b ? a : b);
-    final chartMax = maxVal > 0 ? maxVal * 1.3 : 3000;
+    final chartMax = maxVal > 0 ? maxVal * 1.3 : 3000.0;
 
     return Container(
       decoration: BoxDecoration(

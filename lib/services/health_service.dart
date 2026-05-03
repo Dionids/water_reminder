@@ -47,7 +47,6 @@ class HealthService {
     try {
       if (Platform.isAndroid) {
         await Permission.activityRecognition.request();
-
         final status = await _health.getHealthConnectSdkStatus();
         if (status != HealthConnectSdkStatus.sdkAvailable) {
           await _health.installHealthConnect();
@@ -73,7 +72,7 @@ class HealthService {
     final startOfDay = DateTime(now.year, now.month, now.day);
     try {
       final steps = await _health.getTotalStepsInInterval(startOfDay, now);
-      debugPrint('Steps count: $steps');
+      debugPrint('Steps: $steps');
       return steps ?? 0;
     } catch (e) {
       return 0;
@@ -90,7 +89,6 @@ class HealthService {
         startTime: start,
         endTime: now,
       );
-      debugPrint('Weight data points: ${data.length}');
       if (data.isEmpty) return 0.0;
       return _extractValue(data.last);
     } catch (e) {
@@ -108,7 +106,6 @@ class HealthService {
         startTime: startOfDay,
         endTime: now,
       );
-      debugPrint('Calories data points: ${data.length}');
       double total = 0.0;
       for (var p in data) {
         total += _extractValue(p);
@@ -129,18 +126,13 @@ class HealthService {
         startTime: startOfDay,
         endTime: now,
       );
-
       double total = 0.0;
       for (var p in data) {
         total += _extractValue(p);
       }
-
       if (total == 0 && fallbackSteps != null) {
-        debugPrint('Distance is 0, using fallback calculation from steps');
         return fallbackSteps * 0.75;
       }
-
-      debugPrint('Distance data points: ${data.length}, total: $total');
       return total;
     } catch (e) {
       if (fallbackSteps != null) return fallbackSteps * 0.75;
@@ -158,7 +150,6 @@ class HealthService {
         startTime: start,
         endTime: now,
       );
-      debugPrint('HeartRate data points: ${data.length}');
       if (data.isEmpty) return 0;
       return _extractValue(data.last).toInt();
     } catch (e) {
@@ -166,11 +157,100 @@ class HealthService {
     }
   }
 
-  /// Получает тренировки за сегодня и возвращает сводку:
-  /// общее время + доминирующая интенсивность + названия активностей.
-  ///
-  /// Интенсивность определяется по типу активности (MET по стандарту ВОЗ).
-  /// Fallback: если Samsung вернул OTHER — используем средний пульс.
+  /// Классификация по MET (стандарт ВОЗ) — UPPER_CASE константы health ^13.x
+  WorkoutIntensity _intensityFromActivityType(HealthWorkoutActivityType type) {
+    switch (type) {
+      // Низкая интенсивность — MET 1.5–3
+      case HealthWorkoutActivityType.WALKING:
+      case HealthWorkoutActivityType.YOGA:
+      case HealthWorkoutActivityType.MIND_AND_BODY:
+      case HealthWorkoutActivityType.FLEXIBILITY:
+      case HealthWorkoutActivityType.PILATES:
+      case HealthWorkoutActivityType.TAI_CHI:
+      case HealthWorkoutActivityType.COOLDOWN:
+      case HealthWorkoutActivityType.PREPARATION_AND_RECOVERY:
+      case HealthWorkoutActivityType.GUIDED_BREATHING:
+        return WorkoutIntensity.low;
+
+      // Средняя интенсивность — MET 3–6
+      case HealthWorkoutActivityType.HIKING:
+      case HealthWorkoutActivityType.DANCING:
+      case HealthWorkoutActivityType.SOCIAL_DANCE:
+      case HealthWorkoutActivityType.CARDIO_DANCE:
+      case HealthWorkoutActivityType.GOLF:
+      case HealthWorkoutActivityType.TENNIS:
+      case HealthWorkoutActivityType.VOLLEYBALL:
+      case HealthWorkoutActivityType.TABLE_TENNIS:
+      case HealthWorkoutActivityType.BADMINTON:
+      case HealthWorkoutActivityType.BOWLING:
+      case HealthWorkoutActivityType.FISHING:
+      case HealthWorkoutActivityType.ARCHERY:
+        return WorkoutIntensity.medium;
+
+      // Высокая интенсивность — MET 6–9
+      case HealthWorkoutActivityType.RUNNING:
+      case HealthWorkoutActivityType.RUNNING_TREADMILL:
+      case HealthWorkoutActivityType.BIKING:
+      case HealthWorkoutActivityType.BIKING_STATIONARY:
+      case HealthWorkoutActivityType.SWIMMING:
+      case HealthWorkoutActivityType.SWIMMING_POOL:
+      case HealthWorkoutActivityType.SWIMMING_OPEN_WATER:
+      case HealthWorkoutActivityType.ELLIPTICAL:
+      case HealthWorkoutActivityType.STAIR_CLIMBING:
+      case HealthWorkoutActivityType.STAIR_CLIMBING_MACHINE:
+      case HealthWorkoutActivityType.BASKETBALL:
+      case HealthWorkoutActivityType.SOCCER:
+      case HealthWorkoutActivityType.RUGBY:
+      case HealthWorkoutActivityType.HOCKEY:
+      case HealthWorkoutActivityType.HANDBALL:
+      case HealthWorkoutActivityType.CLIMBING:
+      case HealthWorkoutActivityType.ROCK_CLIMBING:
+      case HealthWorkoutActivityType.ROWING:
+      case HealthWorkoutActivityType.ROWING_MACHINE:
+      case HealthWorkoutActivityType.SKIING:
+      case HealthWorkoutActivityType.CROSS_COUNTRY_SKIING:
+      case HealthWorkoutActivityType.DOWNHILL_SKIING:
+      case HealthWorkoutActivityType.SNOWBOARDING:
+        return WorkoutIntensity.high;
+
+      // Очень высокая — MET > 9
+      case HealthWorkoutActivityType.HIGH_INTENSITY_INTERVAL_TRAINING:
+      case HealthWorkoutActivityType.BOXING:
+      case HealthWorkoutActivityType.KICKBOXING:
+      case HealthWorkoutActivityType.MARTIAL_ARTS:
+      case HealthWorkoutActivityType.JUMP_ROPE:
+      case HealthWorkoutActivityType.CROSS_TRAINING:
+      case HealthWorkoutActivityType.FUNCTIONAL_STRENGTH_TRAINING:
+      case HealthWorkoutActivityType.TRADITIONAL_STRENGTH_TRAINING:
+      case HealthWorkoutActivityType.STRENGTH_TRAINING:
+      case HealthWorkoutActivityType.WEIGHTLIFTING:
+      case HealthWorkoutActivityType.CALISTHENICS:
+      case HealthWorkoutActivityType.MIXED_CARDIO:
+        return WorkoutIntensity.extreme;
+
+      // OTHER — Samsung Health fallback на пульс
+      case HealthWorkoutActivityType.OTHER:
+      default:
+        return WorkoutIntensity.medium;
+    }
+  }
+
+  /// Fallback: зоны ЧСС
+  WorkoutIntensity _intensityFromHeartRate(int bpm) {
+    if (bpm < 100) return WorkoutIntensity.low;
+    if (bpm < 130) return WorkoutIntensity.medium;
+    if (bpm < 155) return WorkoutIntensity.high;
+    return WorkoutIntensity.extreme;
+  }
+
+  String _formatActivityName(HealthWorkoutActivityType type) {
+    final words = type.name.split('_').map((w) {
+      if (w.isEmpty) return w;
+      return w[0].toUpperCase() + w.substring(1).toLowerCase();
+    }).join(' ');
+    return words;
+  }
+
   Future<WorkoutSummaryData> getTodayWorkoutSummary({int avgHeartRate = 0}) async {
     await _configure();
     final now = DateTime.now();
@@ -209,8 +289,8 @@ class HealthService {
           activityName = _formatActivityName(wv.workoutActivityType);
           intensity = _intensityFromActivityType(wv.workoutActivityType);
 
-          // Fallback на пульс если Samsung вернул OTHER
-          if (wv.workoutActivityType == HealthWorkoutActivityType.other &&
+          // Fallback на пульс для Samsung OTHER
+          if (wv.workoutActivityType == HealthWorkoutActivityType.OTHER &&
               avgHeartRate > 0) {
             intensity = _intensityFromHeartRate(avgHeartRate);
           }
@@ -226,7 +306,6 @@ class HealthService {
         debugPrint('Workout: $activityName | $durationMinutes мин | $intensity');
       }
 
-      // Доминирующая интенсивность = максимальная за день
       final dominant = intensities.reduce((a, b) => a.index > b.index ? a : b);
 
       return WorkoutSummaryData(
@@ -244,72 +323,9 @@ class HealthService {
     }
   }
 
-  /// Классификация по MET (Metabolic Equivalent of Task) — стандарт ВОЗ
-  WorkoutIntensity _intensityFromActivityType(HealthWorkoutActivityType type) {
-    switch (type) {
-      // Низкая интенсивность — MET 1.5–3
-      case HealthWorkoutActivityType.walking:
-      case HealthWorkoutActivityType.yoga:
-      case HealthWorkoutActivityType.mindAndBody:
-      case HealthWorkoutActivityType.flexibility:
-      case HealthWorkoutActivityType.stretching:
-      case HealthWorkoutActivityType.pilates:
-        return WorkoutIntensity.low;
-
-      // Средняя интенсивность — MET 3–6
-      case HealthWorkoutActivityType.hiking:
-      case HealthWorkoutActivityType.dancing:
-      case HealthWorkoutActivityType.tennis:
-      case HealthWorkoutActivityType.volleyball:
-      case HealthWorkoutActivityType.golf:
-        return WorkoutIntensity.medium;
-
-      // Высокая интенсивность — MET 6–9
-      case HealthWorkoutActivityType.running:
-      case HealthWorkoutActivityType.cycling:
-      case HealthWorkoutActivityType.swimming:
-      case HealthWorkoutActivityType.elliptical:
-      case HealthWorkoutActivityType.stairClimbing:
-      case HealthWorkoutActivityType.basketball:
-      case HealthWorkoutActivityType.soccer:
-      case HealthWorkoutActivityType.rugby:
-        return WorkoutIntensity.high;
-
-      // Очень высокая — MET > 9
-      case HealthWorkoutActivityType.rowing:
-      case HealthWorkoutActivityType.crossFit:
-      case HealthWorkoutActivityType.boxing:
-      case HealthWorkoutActivityType.martialArts:
-      case HealthWorkoutActivityType.jumpRope:
-      case HealthWorkoutActivityType.highIntensityIntervalTraining:
-        return WorkoutIntensity.extreme;
-
-      // Samsung Health обычно возвращает OTHER — fallback на пульс
-      case HealthWorkoutActivityType.other:
-      default:
-        return WorkoutIntensity.medium;
-    }
-  }
-
-  /// Fallback: определение интенсивности по среднему пульсу (зоны ЧСС)
-  WorkoutIntensity _intensityFromHeartRate(int bpm) {
-    if (bpm < 100) return WorkoutIntensity.low;
-    if (bpm < 130) return WorkoutIntensity.medium;
-    if (bpm < 155) return WorkoutIntensity.high;
-    return WorkoutIntensity.extreme;
-  }
-
-  String _formatActivityName(HealthWorkoutActivityType type) {
-    final raw = type.name;
-    final spaced = raw.replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m[0]}').trim();
-    return spaced[0].toUpperCase() + spaced.substring(1);
-  }
-
   double _extractValue(HealthDataPoint p) {
     final val = p.value;
-    if (val is NumericHealthValue) {
-      return val.numericValue.toDouble();
-    }
+    if (val is NumericHealthValue) return val.numericValue.toDouble();
     return double.tryParse(val.toString()) ?? 0.0;
   }
 
@@ -323,15 +339,10 @@ class HealthService {
         startTime: startOfCheck,
         endTime: now,
       );
-
       if (data.isEmpty) return false;
-
       for (var p in data) {
-        if (now.isAfter(p.dateFrom) && now.isBefore(p.dateTo)) {
-          return true;
-        }
+        if (now.isAfter(p.dateFrom) && now.isBefore(p.dateTo)) return true;
       }
-
       return false;
     } catch (e) {
       return false;

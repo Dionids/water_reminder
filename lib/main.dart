@@ -311,7 +311,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final pct = (_todayWater / _dailyGoal * 100).clamp(0, 100).toInt();
 
     return Scaffold(
