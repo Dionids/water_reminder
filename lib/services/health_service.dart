@@ -20,17 +20,10 @@ class WorkoutSummaryData {
 class HealthService {
   final Health _health = Health();
   bool _configured = false;
-  // Кэш статуса разрешений — не спрашиваем каждые 30 минут
-  bool? _permissionsGranted;
-  DateTime? _permissionsCheckedAt;
 
-  static const _permissionsCacheDuration = Duration(minutes: 10);
-
-  Future<void> _configure() async {
-    if (_configured) return;
-    await _health.configure();
-    _configured = true;
-  }
+  /// Кэш результата авторизации.
+  /// На Android hasPermissions() ненадёжен — кэшируем результат requestAuthorization.
+  bool _permissionsGranted = false;
 
   static const _types = [
     HealthDataType.STEPS,
@@ -42,8 +35,15 @@ class HealthService {
     HealthDataType.WORKOUT,
   ];
 
-  /// Запрашивает разрешения (показывает диалог).
-  /// Вызывать только явно — при первом запуске или из настроек.
+  Future<void> _configure() async {
+    if (_configured) return;
+    await _health.configure();
+    _configured = true;
+  }
+
+  // ── Разрешения ────────────────────────────────────────────────
+
+  /// Запрашивает разрешения с диалогом. Вызывать только явно (ручной sync).
   Future<bool> requestPermissions() async {
     await _configure();
     final permissions = List.filled(_types.length, HealthDataAccess.READ);
@@ -56,9 +56,11 @@ class HealthService {
           return false;
         }
       }
-      final granted = await _health.requestAuthorization(_types, permissions: permissions);
+      final granted = await _health.requestAuthorization(
+        _types,
+        permissions: permissions,
+      );
       _permissionsGranted = granted;
-      _permissionsCheckedAt = DateTime.now();
       debugPrint('Health permissions granted: $granted');
       return granted;
     } catch (e) {
@@ -67,43 +69,54 @@ class HealthService {
     }
   }
 
-  /// Проверяет статус без показа диалога — для авто-синхронизации.
-  /// Использует кэш чтобы не дёргать Health Connect лишний раз.
+  /// Проверяет разрешения без диалога. Для авто-синхронизации.
+  ///
+  /// На Android [hasPermissions] ненадёжен (всегда null в некоторых версиях).
+  /// Поэтому используем кэш из последнего [requestPermissions],
+  /// а как fallback — пробуем прочитать шаги: если данные пришли, доступ есть.
   Future<bool> checkPermissions() async {
     await _configure();
 
-    // Кэш актуален — возвращаем без запроса
-    final cached = _permissionsGranted;
-    final checkedAt = _permissionsCheckedAt;
-    if (cached != null && checkedAt != null &&
-        DateTime.now().difference(checkedAt) < _permissionsCacheDuration) {
-      return cached;
-    }
+    // Если уже авторизовывались в этой сессии — доверяем кэшу
+    if (_permissionsGranted) return true;
 
+    // Попытка через hasPermissions (может вернуть null на Android)
     try {
-      final granted = await _health.hasPermissions(_types) ?? false;
-      _permissionsGranted = granted;
-      _permissionsCheckedAt = DateTime.now();
-      debugPrint('Health permissions check: $granted');
-      return granted;
+      final result = await _health.hasPermissions(_types);
+      if (result != null) {
+        _permissionsGranted = result;
+        return result;
+      }
+    } catch (_) {}
+
+    // Fallback: пробуем прочитать шаги — если 0 и нет ошибки, скорее всего доступ есть
+    try {
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day);
+      await _health.getTotalStepsInInterval(start, now);
+      _permissionsGranted = true;
+      return true;
     } catch (e) {
-      debugPrint('Health checkPermissions error: $e');
-      return _permissionsGranted ?? false;
+      debugPrint('Health checkPermissions fallback error: $e');
+      return false;
     }
   }
 
-  /// Читает все данные за сегодня параллельно.
-  /// Возвращает Map с результатами — удобно для одного await.
+  // ── Главный метод: читает всё за сегодня параллельно ─────────
+
   Future<Map<String, dynamic>> fetchAllTodayData() async {
     await _configure();
 
-    // Все независимые запросы — параллельно
+    final now        = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+
+    // Параллельные запросы
     final results = await Future.wait([
       getTodaySteps(),
       getLatestWeight(),
       getTodayCalories(),
       getLatestHeartRate(),
-      getTodayDistance(),
+      getTodayDistance(startOfDay: startOfDay, now: now),
     ]);
 
     final steps     = results[0] as int;
@@ -112,33 +125,49 @@ class HealthService {
     final heartRate = results[3] as int;
     var   distance  = results[4] as double;
 
-    // Fallback дистанции через шаги — тоже параллельно было бы, но нужны шаги
+    // Fallback дистанции через шаги (среднй шаг ~0.75м)
     if (distance == 0 && steps > 0) {
       distance = steps * 0.75;
+      debugPrint('Distance: fallback from steps → ${distance.toInt()}м');
     }
 
-    // Тренировки — зависят от пульса, идут последними
-    final workout = await getTodayWorkoutSummary(avgHeartRate: heartRate);
+    // Тренировки — после пульса (нужен для fallback интенсивности)
+    final workout = await getTodayWorkoutSummary(
+      avgHeartRate: heartRate,
+      startOfDay: startOfDay,
+      now: now,
+    );
+
+    debugPrint(
+      'Health data: steps=$steps weight=$weight cal=${calories.toInt()} '
+      'hr=$heartRate dist=${distance.toInt()}м '
+      'workout=${workout.totalMinutes}мин ${workout.dominantIntensity.name}',
+    );
 
     return {
-      'steps':            steps,
-      'weight':           weight,
-      'calories':         calories,
-      'heartRate':        heartRate,
-      'distance':         distance,
-      'workoutMinutes':   workout.totalMinutes,
-      'workoutIntensity': workout.dominantIntensity,
-      'activityNames':    workout.activityNames,
+      'steps':             steps,
+      'weight':            weight,
+      'calories':          calories,
+      'heartRate':         heartRate,
+      'distance':          distance,
+      'workoutMinutes':    workout.totalMinutes,
+      'workoutIntensity':  workout.dominantIntensity,
+      'activityNames':     workout.activityNames,
     };
   }
 
+  // ── Отдельные методы ──────────────────────────────────────────
+
   Future<int> getTodaySteps() async {
     await _configure();
-    final now = DateTime.now();
+    final now        = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     try {
-      return await _health.getTotalStepsInInterval(startOfDay, now) ?? 0;
+      final steps = await _health.getTotalStepsInInterval(startOfDay, now) ?? 0;
+      debugPrint('Steps: $steps');
+      return steps;
     } catch (e) {
+      debugPrint('Steps error: $e');
       return 0;
     }
   }
@@ -153,15 +182,21 @@ class HealthService {
         endTime: now,
       );
       if (data.isEmpty) return 0.0;
-      return _extractValue(data.last);
+
+      // Явная сортировка — Health Connect не гарантирует порядок
+      data.sort((a, b) => a.dateFrom.compareTo(b.dateFrom));
+      final weight = _extractValue(data.last);
+      debugPrint('Weight: ${weight}кг (из ${data.length} записей)');
+      return weight;
     } catch (e) {
+      debugPrint('Weight error: $e');
       return 0.0;
     }
   }
 
   Future<double> getTodayCalories() async {
     await _configure();
-    final now = DateTime.now();
+    final now        = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     try {
       final data = await _health.getHealthDataFromTypes(
@@ -169,27 +204,36 @@ class HealthService {
         startTime: startOfDay,
         endTime: now,
       );
-      return data.fold(0.0, (sum, p) => sum + _extractValue(p));
+
+      // Дедупликация overlapping записей Samsung Health:
+      // суммируем только неперекрывающиеся интервалы
+      final total = _sumWithoutOverlap(data);
+      debugPrint('Calories: ${total.toInt()} ккал (из ${data.length} записей)');
+      return total;
     } catch (e) {
+      debugPrint('Calories error: $e');
       return 0.0;
     }
   }
 
-  Future<double> getTodayDistance({int? fallbackSteps}) async {
+  Future<double> getTodayDistance({
+    DateTime? startOfDay,
+    DateTime? now,
+  }) async {
     await _configure();
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
+    final end   = now ?? DateTime.now();
+    final start = startOfDay ?? DateTime(end.year, end.month, end.day);
     try {
       final data = await _health.getHealthDataFromTypes(
         types: [HealthDataType.DISTANCE_DELTA],
-        startTime: startOfDay,
-        endTime: now,
+        startTime: start,
+        endTime: end,
       );
       final total = data.fold(0.0, (sum, p) => sum + _extractValue(p));
-      if (total == 0 && fallbackSteps != null) return fallbackSteps * 0.75;
+      debugPrint('Distance: ${total.toInt()}м (из ${data.length} записей)');
       return total;
     } catch (e) {
-      if (fallbackSteps != null) return fallbackSteps * 0.75;
+      debugPrint('Distance error: $e');
       return 0.0;
     }
   }
@@ -200,27 +244,51 @@ class HealthService {
     try {
       final data = await _health.getHealthDataFromTypes(
         types: [HealthDataType.HEART_RATE],
-        startTime: now.subtract(const Duration(hours: 48)),
+        // Последний час — "текущий" пульс, 48ч слишком широко
+        startTime: now.subtract(const Duration(hours: 1)),
         endTime: now,
       );
-      if (data.isEmpty) return 0;
-      return _extractValue(data.last).toInt();
+      if (data.isEmpty) {
+        // Fallback: последние 24 часа если за час ничего нет
+        final wider = await _health.getHealthDataFromTypes(
+          types: [HealthDataType.HEART_RATE],
+          startTime: now.subtract(const Duration(hours: 24)),
+          endTime: now,
+        );
+        if (wider.isEmpty) return 0;
+        wider.sort((a, b) => a.dateFrom.compareTo(b.dateFrom));
+        final hr = _extractValue(wider.last).toInt();
+        debugPrint('HeartRate (24h fallback): $hr уд/мин');
+        return hr;
+      }
+      // Явная сортировка
+      data.sort((a, b) => a.dateFrom.compareTo(b.dateFrom));
+      final hr = _extractValue(data.last).toInt();
+      debugPrint('HeartRate: $hr уд/мин (из ${data.length} записей)');
+      return hr;
     } catch (e) {
+      debugPrint('HeartRate error: $e');
       return 0;
     }
   }
 
-  Future<WorkoutSummaryData> getTodayWorkoutSummary({int avgHeartRate = 0}) async {
+  Future<WorkoutSummaryData> getTodayWorkoutSummary({
+    int avgHeartRate = 0,
+    DateTime? startOfDay,
+    DateTime? now,
+  }) async {
     await _configure();
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
+    final end   = now ?? DateTime.now();
+    final start = startOfDay ?? DateTime(end.year, end.month, end.day);
 
     try {
       final data = await _health.getHealthDataFromTypes(
         types: [HealthDataType.WORKOUT],
-        startTime: startOfDay,
-        endTime: now,
+        startTime: start,
+        endTime: end,
       );
+
+      debugPrint('Workouts: ${data.length} записей');
 
       if (data.isEmpty) {
         return const WorkoutSummaryData(
@@ -230,12 +298,15 @@ class HealthService {
         );
       }
 
-      int totalMinutes = 0;
+      // FIX: используем секунды для точности, затем конвертируем
+      int totalSeconds = 0;
       final intensities = <WorkoutIntensity>[];
       final names = <String>[];
 
       for (final point in data) {
-        totalMinutes += point.dateTo.difference(point.dateFrom).inMinutes;
+        final durationSeconds =
+            point.dateTo.difference(point.dateFrom).inSeconds;
+        totalSeconds += durationSeconds;
 
         WorkoutIntensity intensity;
         String activityName;
@@ -243,33 +314,77 @@ class HealthService {
         if (point.value is WorkoutHealthValue) {
           final wv = point.value as WorkoutHealthValue;
           activityName = _formatActivityName(wv.workoutActivityType);
-          intensity = _intensityFromActivityType(wv.workoutActivityType);
-          if (wv.workoutActivityType == HealthWorkoutActivityType.OTHER && avgHeartRate > 0) {
+          intensity    = _intensityFromActivityType(wv.workoutActivityType);
+
+          // Samsung fallback: если OTHER и есть пульс — используем зоны ЧСС
+          if (wv.workoutActivityType == HealthWorkoutActivityType.OTHER &&
+              avgHeartRate > 0) {
             intensity = _intensityFromHeartRate(avgHeartRate);
           }
         } else {
           activityName = 'Тренировка';
-          intensity = avgHeartRate > 0 ? _intensityFromHeartRate(avgHeartRate) : WorkoutIntensity.medium;
+          intensity    = avgHeartRate > 0
+              ? _intensityFromHeartRate(avgHeartRate)
+              : WorkoutIntensity.medium;
         }
 
         intensities.add(intensity);
         if (!names.contains(activityName)) names.add(activityName);
+
+        debugPrint(
+          'Workout: $activityName | '
+          '${(durationSeconds / 60).round()} мин | '
+          '${intensity.name}',
+        );
       }
 
-      final dominant = intensities.reduce((a, b) => a.index > b.index ? a : b);
+      final dominant =
+          intensities.reduce((a, b) => a.index > b.index ? a : b);
+
+      // Округляем секунды до минут (29:59 → 30 мин, не 29)
+      final totalMinutes = (totalSeconds / 60).round();
+
       return WorkoutSummaryData(
         totalMinutes: totalMinutes,
         dominantIntensity: dominant,
         activityNames: names,
       );
     } catch (e) {
-      debugPrint('Workout fetch error: $e');
+      debugPrint('Workout error: $e');
       return const WorkoutSummaryData(
         totalMinutes: 0,
         dominantIntensity: WorkoutIntensity.none,
         activityNames: [],
       );
     }
+  }
+
+  // ── Вспомогательные ──────────────────────────────────────────
+
+  /// Суммирует значения без учёта перекрывающихся интервалов.
+  /// Samsung Health иногда пишет дублирующие записи за один и тот же период.
+  double _sumWithoutOverlap(List<HealthDataPoint> points) {
+    if (points.isEmpty) return 0.0;
+
+    // Сортируем по времени начала
+    points.sort((a, b) => a.dateFrom.compareTo(b.dateFrom));
+
+    double total = 0.0;
+    DateTime? lastEnd;
+
+    for (final p in points) {
+      if (lastEnd != null && p.dateFrom.isBefore(lastEnd)) {
+        // Перекрывающийся интервал — пропускаем
+        debugPrint(
+          'Skipping overlapping record: ${p.dateFrom} – ${p.dateTo}',
+        );
+        continue;
+      }
+      total  += _extractValue(p);
+      lastEnd = p.dateTo;
+    }
+
+    return total;
   }
 
   WorkoutIntensity _intensityFromActivityType(HealthWorkoutActivityType type) {
@@ -374,7 +489,9 @@ class HealthService {
         endTime: now,
       );
       if (data.isEmpty) return false;
-      return data.any((p) => now.isAfter(p.dateFrom) && now.isBefore(p.dateTo));
+      return data.any(
+        (p) => now.isAfter(p.dateFrom) && now.isBefore(p.dateTo),
+      );
     } catch (e) {
       return false;
     }
