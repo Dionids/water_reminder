@@ -23,7 +23,9 @@ void main() async {
   await initializeDateFormatting('ru', null);
 
   // Firebase — инициализируем первым
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,

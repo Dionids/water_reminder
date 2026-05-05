@@ -50,9 +50,11 @@ class HiveService {
     final box   = Hive.box<WaterLog>(waterBoxName);
     final now   = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    return box.values
-        .where((log) => log.date.isAfter(today))
-        .fold<double>(0.0, (sum, log) => sum + log.amount);
+    double total = 0.0;
+    for (final log in box.values) {
+      if (log.date.isAfter(today)) total += log.amount;
+    }
+    return total;
   }
 
   Future<List<WaterLog>> getAllLogs() async {
