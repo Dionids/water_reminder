@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'services/hive_service.dart';
 import 'services/health_service.dart';
