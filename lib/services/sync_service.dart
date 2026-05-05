@@ -46,12 +46,14 @@ void callbackDispatcher() {
             : (profile?.weight ?? 70.0);
 
         final serverResponse = await apiService.syncActivity(
-          userId: profile?.id ?? 'user_local',
+          firebaseUid: profile?.id ?? 'user_local',
           steps: data['steps'] as int,
           weightKg: effectiveWeight,
           workoutMinutes: data['workoutMinutes'] as int,
           workoutIntensity: data['workoutIntensity'] as WorkoutIntensity,
           activityNames: data['activityNames'] as List<String>,
+          calories: (data['calories'] as double?) ?? 0.0,
+          distanceM: (data['distance'] as double?) ?? 0.0,
         );
 
         if (serverResponse != null && profile != null) {
