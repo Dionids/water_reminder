@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../services/hive_service.dart';
 import '../services/health_service.dart';
+import '../services/auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final HiveService hiveService;
   final HealthService healthService;
+  final AuthService authService;
 
   const ProfileScreen({
     super.key,
     required this.hiveService,
     required this.healthService,
+    required this.authService,
   });
 
   @override
@@ -274,6 +277,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
+            const SizedBox(height: 12),
+
+            // ── Аккаунт ────────────────────────────────────────
+            _buildAccountCard(),
+
             const SizedBox(height: 20),
 
             // ── Кнопка сохранить ───────────────────────────────
@@ -298,6 +306,136 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAccountCard() {
+    final profile = widget.hiveService.getProfile();
+    final isAnonymous = profile?.isAnonymous ?? true;
+
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Аккаунт',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          const SizedBox(height: 12),
+
+          if (!isAnonymous) ...[
+            Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.account_circle_rounded,
+                    color: Color(0xFF1565C0), size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(profile?.displayName ?? 'Пользователь',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  if (profile?.email != null)
+                    Text(profile!.email!,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              )),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('Google',
+                    style: TextStyle(fontSize: 11,
+                        color: Color(0xFF43A047), fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ] else ...[
+            Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.person_outline_rounded,
+                    color: Colors.grey.shade500, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Гостевой аккаунт',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text('История не сохраняется при смене устройства',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                ],
+              )),
+            ]),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final result = await widget.authService.signInWithGoogle();
+                  if (result.success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Аккаунт привязан к Google ✓')),
+                    );
+                    setState(() {});
+                  }
+                },
+                icon: const Icon(Icons.link_rounded, size: 18),
+                label: const Text('Привязать Google аккаунт'),
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 4),
+
+          // Выход
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            title: const Text('Выйти',
+                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w500)),
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Выйти из аккаунта?'),
+                  content: const Text(
+                      'Локальные данные останутся на устройстве.'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Отмена')),
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Выйти',
+                            style: TextStyle(color: Colors.red))),
+                  ],
+                ),
+              );
+              if (confirm == true && mounted) {
+                await widget.authService.signOut();
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/login', (_) => false);
+              }
+            },
+          ),
+        ],
       ),
     );
   }

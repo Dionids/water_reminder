@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB:       aquatrack
+      POSTGRES_USER:     aquatrack
+      POSTGRES_PASSWORD: aquatrack_secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://aquatrack:aquatrack_secret@db:5432/aquatrack
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

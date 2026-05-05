@@ -4,11 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:firebase_core/firebase_core.dart';
+import 'services/auth_service.dart';
 import 'services/hive_service.dart';
 import 'services/health_service.dart';
 import 'services/notification_service.dart';
 import 'services/api_service.dart';
 import 'services/sync_service.dart';
+import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/profile_screen.dart';
@@ -17,6 +20,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tz.initializeTimeZones();
   await initializeDateFormatting('ru', null);
+
+  // Firebase — инициализируем первым
+  await Firebase.initializeApp();
+
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
@@ -24,6 +31,8 @@ void main() async {
 
   final hiveService = HiveService();
   await hiveService.init();
+
+  final authService = AuthService(hiveService);
 
   // Инициализируем WorkManager для фоновой синхронизации
   await SyncService.initWorkManager();
@@ -36,32 +45,52 @@ void main() async {
   );
   await notificationService.init();
 
+  // Восстанавливаем Firebase сессию
+  final existingProfile = await authService.initializeAuth();
+
   runApp(MyApp(
     hiveService: hiveService,
+    authService: authService,
     healthService: healthService,
     notificationService: notificationService,
+    hasExistingProfile: existingProfile?.weight != null,
   ));
 }
 
 class MyApp extends StatelessWidget {
   final HiveService hiveService;
+  final AuthService authService;
   final HealthService healthService;
   final NotificationService notificationService;
+  final bool hasExistingProfile;
 
   const MyApp({
     super.key,
     required this.hiveService,
+    required this.authService,
     required this.healthService,
     required this.notificationService,
+    required this.hasExistingProfile,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Маршрутизация:
+    // нет профиля → /login (новый пользователь)
+    // есть uid, нет веса → /onboarding (вошёл через Google, но не заполнил данные)
+    // есть всё → /home
+    final String initialRoute;
     final profile = hiveService.getProfile();
-    final initialRoute = profile == null ? '/onboarding' : '/home';
+    if (profile?.firebaseUid == null) {
+      initialRoute = '/login';
+    } else if (!hasExistingProfile) {
+      initialRoute = '/onboarding';
+    } else {
+      initialRoute = '/home';
+    }
 
     return MaterialApp(
-      title: 'Water Reminder',
+      title: 'AquaTrack',
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -80,6 +109,10 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: initialRoute,
       routes: {
+        '/login': (context) => LoginScreen(
+              authService: authService,
+              hiveService: hiveService,
+            ),
         '/home': (context) => MyHomePage(
               hiveService: hiveService,
               healthService: healthService,
@@ -90,6 +123,7 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => ProfileScreen(
               hiveService: hiveService,
               healthService: healthService,
+              authService: authService,
             ),
       },
     );
@@ -201,6 +235,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Future<void> _addWater(double amount) async {
     await widget.hiveService.addWaterLog(amount);
+    // Дублируем на сервер (fire-and-forget, офлайн — просто логируем)
+    final profile = widget.hiveService.getProfile();
+    if (profile?.firebaseUid != null) {
+      _apiService.logWater(
+        firebaseUid: profile!.firebaseUid!,
+        amountMl: amount,
+        loggedAt: DateTime.now(),
+      );
+    }
     await _loadData();
     await widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal);
   }
@@ -255,12 +298,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final effectiveWeight = weight > 0 ? weight : (profile?.weight ?? 70.0);
 
       final serverResponse = await _apiService.syncActivity(
-        userId: profile?.id ?? 'user_local',
+        firebaseUid: profile?.id ?? 'user_local',
         steps: steps,
         weightKg: effectiveWeight,
         workoutMinutes: workoutMinutes,
         workoutIntensity: workoutIntensity,
         activityNames: activityNames,
+        calories: calories,
+        distanceM: distance,
       );
 
       if (!mounted) return;

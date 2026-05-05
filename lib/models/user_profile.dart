@@ -16,19 +16,44 @@ class UserProfile extends HiveObject {
   @HiveField(3)
   DateTime? lastSync;
 
-  /// Уникальный идентификатор пользователя для API.
-  /// Генерируется при первом сохранении профиля.
+  /// Firebase UID — основной идентификатор пользователя.
+  /// Устанавливается при первом входе (анонимном или через Google).
+  /// Сохраняется при переустановке если вход через Google.
   @HiveField(4)
-  String? userId;
+  String? firebaseUid;
+
+  /// Android Device ID — резервный идентификатор.
+  /// Позволяет восстановить профиль по устройству если Firebase недоступен.
+  @HiveField(5)
+  String? deviceId;
+
+  /// Имя пользователя (из Google аккаунта или введённое вручную)
+  @HiveField(6)
+  String? displayName;
+
+  /// Email (из Google аккаунта)
+  @HiveField(7)
+  String? email;
+
+  /// Вошёл ли через Google (false = анонимный)
+  @HiveField(8)
+  bool isAnonymous;
 
   UserProfile({
     this.weight,
     this.age,
     this.dailyBaseGoal,
     this.lastSync,
-    this.userId,
+    this.firebaseUid,
+    this.deviceId,
+    this.displayName,
+    this.email,
+    this.isAnonymous = true,
   });
 
-  /// Возвращает userId или fallback-строку если не задан
-  String get id => userId ?? 'user_local';
+  /// Основной ID для API запросов — всегда Firebase UID
+  String get id => firebaseUid ?? deviceId ?? 'user_local';
+
+  /// Отображаемое имя — Google имя или заглушка
+  String get name => displayName ?? (isAnonymous ? 'Гость' : 'Пользователь');
 }
