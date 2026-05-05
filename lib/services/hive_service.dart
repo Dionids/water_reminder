@@ -3,13 +3,12 @@ import '../models/water_log.dart';
 import '../models/user_profile.dart';
 
 class HiveService {
-  static const String waterBoxName = 'water_logs';
+  static const String waterBoxName   = 'water_logs';
   static const String profileBoxName = 'user_profile';
 
   Future<void> init() async {
     await Hive.initFlutter();
-    
-    // Регистрация адаптеров (они будут сгенерированы позже)
+
     if (!Hive.isAdapterRegistered(0)) {
       Hive.registerAdapter(WaterLogAdapter());
     }
@@ -21,29 +20,39 @@ class HiveService {
     await Hive.openBox<UserProfile>(profileBoxName);
   }
 
-  // --- Water Logs ---
+  // ── Water Logs ───────────────────────────────────────────────────
 
-  Future<void> addWaterLog(double amount) async {
+  /// Добавляет лог локально. synced=false — попадёт в офлайн-очередь.
+  Future<WaterLog> addWaterLog(double amount) async {
     final box = Hive.box<WaterLog>(waterBoxName);
     final log = WaterLog(
       amount: amount,
-      date: DateTime.now(),
+      date:   DateTime.now(),
+      synced: false,
     );
     await box.add(log);
+    return log;
+  }
+
+  /// Помечает лог как синхронизированный с сервером.
+  Future<void> markLogSynced(WaterLog log) async {
+    log.synced = true;
+    await log.save();
+  }
+
+  /// Возвращает все несинхронизированные логи (офлайн-очередь).
+  List<WaterLog> getUnsyncedLogs() {
+    final box = Hive.box<WaterLog>(waterBoxName);
+    return box.values.where((l) => !l.synced).toList();
   }
 
   Future<double> getTotalWaterToday() async {
-    final box = Hive.box<WaterLog>(waterBoxName);
-    final now = DateTime.now();
+    final box   = Hive.box<WaterLog>(waterBoxName);
+    final now   = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
-    final logsToday = box.values.where((log) => log.date.isAfter(today));
-    
-    double total = 0;
-    for (var log in logsToday) {
-      total += log.amount;
-    }
-    return total;
+    return box.values
+        .where((log) => log.date.isAfter(today))
+        .fold(0.0, (sum, log) => sum + log.amount);
   }
 
   Future<List<WaterLog>> getAllLogs() async {
@@ -51,9 +60,7 @@ class HiveService {
     return box.values.toList()..sort((a, b) => b.date.compareTo(a.date));
   }
 
-  // Удаление выполняется через log.delete() напрямую на объекте HiveObject
-
-  // --- User Profile ---
+  // ── User Profile ─────────────────────────────────────────────────
 
   Future<void> saveProfile(UserProfile profile) async {
     final box = Hive.box<UserProfile>(profileBoxName);
@@ -65,7 +72,11 @@ class HiveService {
     return box.get('current_profile');
   }
 
-  // Вспомогательный метод для совместимости с кодом, который ожидал Stream от Isar
+  Future<void> clearProfile() async {
+    final box = Hive.box<UserProfile>(profileBoxName);
+    await box.delete('current_profile');
+  }
+
   Stream<void> watchWater() {
     return Hive.box<WaterLog>(waterBoxName).watch();
   }

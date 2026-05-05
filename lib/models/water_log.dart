@@ -13,9 +13,15 @@ class WaterLog extends HiveObject {
   @HiveField(2)
   final DateTime date;
 
+  /// Флаг — отправлен ли лог на сервер.
+  /// false = нужно отправить при следующей синхронизации (офлайн-очередь).
+  @HiveField(3)
+  bool synced;
+
   WaterLog({
     this.id,
     required this.amount,
     required this.date,
+    this.synced = false,
   });
 }

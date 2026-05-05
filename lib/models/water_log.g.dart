@@ -17,22 +17,25 @@ class WaterLogAdapter extends TypeAdapter<WaterLog> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return WaterLog(
-      id: fields[0] as int?,
+      id:     fields[0] as int?,
       amount: fields[1] as double,
-      date: fields[2] as DateTime,
+      date:   fields[2] as DateTime,
+      synced: fields[3] as bool? ?? false,
     );
   }
 
   @override
   void write(BinaryWriter writer, WaterLog obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.amount)
       ..writeByte(2)
-      ..write(obj.date);
+      ..write(obj.date)
+      ..writeByte(3)
+      ..write(obj.synced);
   }
 
   @override

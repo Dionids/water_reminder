@@ -4,9 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'hive_service.dart';
+import 'api_service.dart';
 import '../models/user_profile.dart';
 
-/// Web Client ID из google-services.json (client_type: 3)
+/// Web Client ID (client_type: 3) из google-services.json
 const _webClientId =
     '624904190292-rufut8a3q3r5guea0v3dgkmo0l68sh5n.apps.googleusercontent.com';
 
@@ -25,26 +26,30 @@ class AuthResult {
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(serverClientId: _webClientId);
+
+  /// FIX: На Android используем clientId, не serverClientId
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId: _webClientId,
+    scopes: ['email', 'profile'],
+  );
+
   final HiveService _hiveService;
+  final ApiService _apiService;
 
-  AuthService(this._hiveService);
+  AuthService(this._hiveService, this._apiService);
 
-  User? get currentUser => _auth.currentUser;
-  bool get isSignedIn => currentUser != null;
-  bool get isAnonymous => currentUser?.isAnonymous ?? true;
-
+  User? get currentUser     => _auth.currentUser;
+  bool get isSignedIn       => currentUser != null;
+  bool get isAnonymous      => currentUser?.isAnonymous ?? true;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // ─────────────────────────────────────────────────────────────────
-  // Получить Device ID (резервный идентификатор)
-  // ─────────────────────────────────────────────────────────────────
+  // ── Device ID ──────────────────────────────────────────────────
+
   Future<String?> _getDeviceId() async {
     try {
-      final deviceInfo = DeviceInfoPlugin();
       if (Platform.isAndroid) {
-        final info = await deviceInfo.androidInfo;
-        return info.id; // уникальный Android ID
+        final info = await DeviceInfoPlugin().androidInfo;
+        return info.id;
       }
       return null;
     } catch (e) {
@@ -53,70 +58,67 @@ class AuthService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Инициализация — вызывается при старте приложения
-  // Логика:
-  //   1. Есть Firebase сессия → восстанавливаем
-  //   2. Нет сессии, есть профиль в Hive → анонимный вход
-  //   3. Нет ничего → null (показываем онбординг)
-  // ─────────────────────────────────────────────────────────────────
+  // ── Инициализация при старте ───────────────────────────────────
+
   Future<UserProfile?> initializeAuth() async {
     try {
-      final firebaseUser = _auth.currentUser;
+      final firebaseUser   = _auth.currentUser;
       final existingProfile = _hiveService.getProfile();
 
       if (firebaseUser != null) {
-        debugPrint('Auth: восстановлена Firebase сессия ${firebaseUser.uid}');
-        // Обновляем профиль актуальными данными из Firebase
+        debugPrint('Auth: восстановлена сессия ${firebaseUser.uid}');
         return await _syncProfileFromFirebase(firebaseUser, existingProfile);
       }
 
+      // Firebase сессии нет, но профиль с uid есть → перевходим анонимно
       if (existingProfile != null && existingProfile.firebaseUid != null) {
-        // Профиль есть, но Firebase сессия истекла — входим анонимно
-        debugPrint('Auth: профиль есть, Firebase сессии нет — анонимный вход');
-        return await _signInAnonymously(existingProfile);
+        debugPrint('Auth: сессия истекла, перевход анонимно');
+        return await _reSignInAnonymously(existingProfile);
       }
 
-      debugPrint('Auth: новый пользователь — нужен онбординг');
+      debugPrint('Auth: новый пользователь');
       return null;
     } catch (e) {
       debugPrint('Auth initializeAuth error: $e');
-      return _hiveService.getProfile(); // fallback на локальный профиль
+      return _hiveService.getProfile();
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Анонимный вход — создаёт Firebase UID без регистрации
-  // ─────────────────────────────────────────────────────────────────
+  // ── Анонимный вход ─────────────────────────────────────────────
+
   Future<AuthResult> signInAnonymously() async {
     try {
       final credential = await _auth.signInAnonymously();
-      final user = credential.user!;
-      debugPrint('Auth: анонимный вход, uid=${user.uid}');
+      final user       = credential.user!;
+      debugPrint('Auth: анонимный uid=${user.uid}');
 
       final deviceId = await _getDeviceId();
-      final profile = _hiveService.getProfile() ??
-          UserProfile(isAnonymous: true);
+      final profile  = _hiveService.getProfile() ?? UserProfile(isAnonymous: true);
 
-      profile.firebaseUid = user.uid;
-      profile.deviceId = deviceId;
-      profile.isAnonymous = true;
+      profile
+        ..firebaseUid = user.uid
+        ..deviceId    = deviceId
+        ..isAnonymous = true;
+
       await _hiveService.saveProfile(profile);
+
+      // Регистрируем на сервере
+      await _registerOnServer(profile);
 
       return AuthResult.success(profile);
     } on FirebaseAuthException catch (e) {
-      debugPrint('Auth signInAnonymously error: ${e.code}');
-      return AuthResult.failure(_authErrorMessage(e.code));
+      debugPrint('Auth anon error: ${e.code}');
+      return AuthResult.failure(_errorMessage(e.code));
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Google Sign-In
-  // Если пользователь был анонимным — привязываем Google к существующему
-  // Firebase UID (история не теряется). Иначе — новый вход.
-  // ─────────────────────────────────────────────────────────────────
+  // ── Google Sign-In ──────────────────────────────────────────────
+
   Future<AuthResult> signInWithGoogle() async {
     try {
+      // Сбрасываем предыдущую Google сессию чтобы показать picker аккаунтов
+      await _googleSignIn.signOut();
+
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         return const AuthResult.failure('Вход отменён');
@@ -125,23 +127,23 @@ class AuthService {
       final googleAuth = await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+        idToken:     googleAuth.idToken,
       );
 
       User user;
 
-      // Если анонимный — привязываем Google аккаунт к существующему UID
       if (_auth.currentUser?.isAnonymous == true) {
+        // Привязываем Google к анонимному аккаунту — uid сохраняется
         try {
           final linked = await _auth.currentUser!.linkWithCredential(credential);
           user = linked.user!;
-          debugPrint('Auth: анонимный аккаунт привязан к Google, uid=${user.uid}');
+          debugPrint('Auth: анонимный → Google uid=${user.uid}');
         } on FirebaseAuthException catch (e) {
           if (e.code == 'credential-already-in-use') {
-            // Google аккаунт уже привязан к другому UID — входим в него
+            // Этот Google аккаунт уже есть в Firebase — входим в него
             final result = await _auth.signInWithCredential(credential);
             user = result.user!;
-            debugPrint('Auth: вход в существующий Google аккаунт, uid=${user.uid}');
+            debugPrint('Auth: существующий Google аккаунт uid=${user.uid}');
           } else {
             rethrow;
           }
@@ -149,50 +151,71 @@ class AuthService {
       } else {
         final result = await _auth.signInWithCredential(credential);
         user = result.user!;
-        debugPrint('Auth: Google Sign-In, uid=${user.uid}');
+        debugPrint('Auth: Google Sign-In uid=${user.uid}');
       }
 
       final deviceId = await _getDeviceId();
-      final profile = _hiveService.getProfile() ?? UserProfile();
+      final profile  = _hiveService.getProfile() ?? UserProfile();
 
-      profile.firebaseUid = user.uid;
-      profile.deviceId = deviceId;
-      profile.displayName = user.displayName ?? googleUser.displayName;
-      profile.email = user.email ?? googleUser.email;
-      profile.isAnonymous = false;
+      profile
+        ..firebaseUid = user.uid
+        ..deviceId    = deviceId
+        ..displayName = user.displayName ?? googleUser.displayName
+        ..email       = user.email ?? googleUser.email
+        ..isAnonymous = false;
+
       await _hiveService.saveProfile(profile);
+
+      // Регистрируем / обновляем на сервере
+      await _registerOnServer(profile);
 
       return AuthResult.success(profile);
     } on FirebaseAuthException catch (e) {
-      debugPrint('Auth signInWithGoogle error: ${e.code}');
-      return AuthResult.failure(_authErrorMessage(e.code));
+      debugPrint('Auth Google error: ${e.code} — ${e.message}');
+      return AuthResult.failure(_errorMessage(e.code));
     } catch (e) {
-      debugPrint('Auth signInWithGoogle unexpected: $e');
+      debugPrint('Auth Google unexpected: $e');
       return AuthResult.failure('Не удалось войти через Google');
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Выход
-  // ─────────────────────────────────────────────────────────────────
+  // ── Выход ──────────────────────────────────────────────────────
+
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
+    await _hiveService.clearProfile();
     debugPrint('Auth: выход выполнен');
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Вспомогательные методы
-  // ─────────────────────────────────────────────────────────────────
+  // ── Приватные методы ───────────────────────────────────────────
 
-  Future<UserProfile> _signInAnonymously(UserProfile existing) async {
+  Future<void> _registerOnServer(UserProfile profile) async {
+    if (profile.firebaseUid == null) return;
+    try {
+      await _apiService.upsertUser(
+        firebaseUid:  profile.firebaseUid!,
+        deviceId:     profile.deviceId,
+        displayName:  profile.displayName,
+        email:        profile.email,
+        isAnonymous:  profile.isAnonymous,
+        weightKg:     profile.weight,
+        age:          profile.age,
+      );
+    } catch (e) {
+      // Офлайн — не критично, попробуем при следующей синхронизации
+      debugPrint('Auth _registerOnServer offline: $e');
+    }
+  }
+
+  Future<UserProfile> _reSignInAnonymously(UserProfile existing) async {
     try {
       final credential = await _auth.signInAnonymously();
       existing.firebaseUid = credential.user!.uid;
       existing.isAnonymous = true;
       await _hiveService.saveProfile(existing);
     } catch (e) {
-      debugPrint('Auth _signInAnonymously fallback: $e');
+      debugPrint('Auth _reSignInAnonymously error: $e');
     }
     return existing;
   }
@@ -200,23 +223,22 @@ class AuthService {
   Future<UserProfile> _syncProfileFromFirebase(
       User firebaseUser, UserProfile? existing) async {
     final profile = existing ?? UserProfile();
-    profile.firebaseUid = firebaseUser.uid;
-    profile.isAnonymous = firebaseUser.isAnonymous;
+
+    profile
+      ..firebaseUid = firebaseUser.uid
+      ..isAnonymous = firebaseUser.isAnonymous;
 
     if (!firebaseUser.isAnonymous) {
       profile.displayName ??= firebaseUser.displayName;
       profile.email ??= firebaseUser.email;
     }
 
-    if (profile.deviceId == null) {
-      profile.deviceId = await _getDeviceId();
-    }
-
+    profile.deviceId ??= await _getDeviceId();
     await _hiveService.saveProfile(profile);
     return profile;
   }
 
-  String _authErrorMessage(String code) {
+  String _errorMessage(String code) {
     switch (code) {
       case 'network-request-failed':
         return 'Нет подключения к интернету';
@@ -226,8 +248,11 @@ class AuthService {
         return 'Аккаунт заблокирован';
       case 'account-exists-with-different-credential':
         return 'Аккаунт уже существует с другим методом входа';
+      case 'sign_in_canceled':
+      case 'canceled':
+        return 'Вход отменён';
       default:
-        return 'Ошибка аутентификации: $code';
+        return 'Ошибка: $code';
     }
   }
 }

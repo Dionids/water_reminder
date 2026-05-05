@@ -32,7 +32,7 @@ void main() async {
   final hiveService = HiveService();
   await hiveService.init();
 
-  final authService = AuthService(hiveService);
+  final authService = AuthService(hiveService, ApiService());
 
   // Инициализируем WorkManager для фоновой синхронизации
   await SyncService.initWorkManager();
@@ -234,18 +234,49 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _addWater(double amount) async {
-    await widget.hiveService.addWaterLog(amount);
-    // Дублируем на сервер (fire-and-forget, офлайн — просто логируем)
-    final profile = widget.hiveService.getProfile();
-    if (profile?.firebaseUid != null) {
-      _apiService.logWater(
-        firebaseUid: profile!.firebaseUid!,
-        amountMl: amount,
-        loggedAt: DateTime.now(),
-      );
-    }
+    // Сохраняем локально (synced=false)
+    final log = await widget.hiveService.addWaterLog(amount);
     await _loadData();
     await widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal);
+
+    // Пробуем сразу отправить на сервер
+    final profile = widget.hiveService.getProfile();
+    if (profile?.firebaseUid != null) {
+      try {
+        await _apiService.logWater(
+          firebaseUid: profile!.firebaseUid!,
+          amountMl:    amount,
+          loggedAt:    log.date,
+        );
+        // Успешно — помечаем как синхронизированный
+        await widget.hiveService.markLogSynced(log);
+      } catch (_) {
+        // Офлайн — лог остаётся synced=false, отправится при следующей синхронизации
+        debugPrint('Water log queued offline: $amount мл');
+      }
+    }
+  }
+
+  /// Отправляет на сервер все логи воды которые не дошли (офлайн-очередь).
+  Future<void> _flushWaterLogs(String firebaseUid) async {
+    final unsynced = widget.hiveService.getUnsyncedLogs();
+    if (unsynced.isEmpty) return;
+
+    debugPrint('Flush: ${unsynced.length} неотправленных логов воды');
+
+    for (final log in unsynced) {
+      try {
+        await _apiService.logWater(
+          firebaseUid: firebaseUid,
+          amountMl:    log.amount,
+          loggedAt:    log.date,
+        );
+        await widget.hiveService.markLogSynced(log);
+      } catch (e) {
+        debugPrint('Flush error для лога ${log.date}: $e');
+        break; // Если сервер недоступен — прекращаем, попробуем в следующий раз
+      }
+    }
   }
 
   /// [silent] = true — авто-синхронизация (без диалога разрешений, без SnackBar).
@@ -327,6 +358,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           _lastSyncTime   = DateTime.now();
         });
         _animateProgress(_todayWater / newGoal);
+
+        // Флаш офлайн-очереди — отправляем логи воды которые не дошли до сервера
+        if (profile?.firebaseUid != null) {
+          _flushWaterLogs(profile!.firebaseUid!);
+        }
+
         if (!silent) _showSnackBar('Норма обновлена: $newGoal мл 💧');
       } else {
         // Офлайн — считаем локально, но время синхронизации всё равно обновляем
