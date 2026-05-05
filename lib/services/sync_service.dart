@@ -101,12 +101,12 @@ class SyncService {
       _kBackgroundSyncTask,
       _kBackgroundSyncTask,
       frequency: _kBackgroundSyncInterval,
-      // Выполнять только при наличии сети
       constraints: Constraints(
         networkType: NetworkType.connected,
       ),
-      // Если задача уже зарегистрирована — заменяем (не дублируем)
       existingWorkPolicy: ExistingWorkPolicy.replace,
+      backoffPolicy: BackoffPolicy.linear,
+      backoffPolicyDelay: const Duration(minutes: 5),
     );
     debugPrint('WorkManager: фоновая синхронизация зарегистрирована');
   }
