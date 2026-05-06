@@ -261,7 +261,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     // Обновляем виджет на домашнем экране
     await HomeWidgetService().update(
       currentMl: _todayWater,
-      goalMl: _dailyGoal,
+      goalMl: _dailyGoal.toDouble(),
     );
 
     // Пробуем сразу отправить на сервер

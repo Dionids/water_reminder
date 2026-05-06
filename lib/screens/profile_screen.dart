@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/hive_service.dart';
 import '../services/health_service.dart';
 import '../services/auth_service.dart';
-import '../services/wear_sync_service.dart';
 import '../services/home_widget_service.dart';
-import 'package:home_widget/home_widget.dart';
 
 class ProfileScreen extends StatefulWidget {
   final HiveService hiveService;
