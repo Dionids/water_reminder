@@ -253,7 +253,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     // Синхронизируем на часы
     await WearSyncService().pushToWatch(
-      currentMl: _todayTotal.toInt(),
+      currentMl: _todayWater.toInt(),
       goalMl: _dailyGoal.toInt(),
     );
 
@@ -573,7 +573,7 @@ class _HeroWaterCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: fillColor.withOpacity(0.35),
+            color: fillColor.withValues(alpha: 0.35),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -603,7 +603,7 @@ class _HeroWaterCard extends StatelessWidget {
                       Text(
                         'из $dailyGoal мл',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
+                          color: Colors.white.withValues(alpha: 0.75),
                           fontSize: 16,
                         ),
                       ),
