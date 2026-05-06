@@ -38,6 +38,10 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
+
+    // Jetpack Glance — виджет на домашний экран
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-material3:1.1.0")
 }
 
 flutter {

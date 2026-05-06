@@ -3,6 +3,8 @@ import '../services/hive_service.dart';
 import '../services/health_service.dart';
 import '../services/auth_service.dart';
 import '../services/wear_sync_service.dart';
+import '../services/home_widget_service.dart';
+import 'package:home_widget/home_widget.dart';
 
 class ProfileScreen extends StatefulWidget {
   final HiveService hiveService;
@@ -56,18 +58,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() => _isLoadingFromHealth = false);
   }
 
-  Future<void> _addWearTile() async {
+  Future<void> _addHomeWidget() async {
+    // Обновляем данные в виджете
     final profile = widget.hiveService.getProfile();
     final totalMl = await widget.hiveService.getTotalWaterToday();
-    await WearSyncService().pushToWatch(
-      currentMl: totalMl.toInt(),
-      goalMl: profile?.dailyBaseGoal ?? 2000,
+    await HomeWidgetService().update(
+      currentMl: totalMl,
+      goalMl: (profile?.dailyBaseGoal ?? 2000).toDouble(),
     );
+
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Данные отправлены. Откройте AquaTrack на часах — появится диалог добавления карточки.'),
-        duration: Duration(seconds: 4),
+    // Показываем инструкцию — Android не разрешает добавлять виджет программно
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Добавить виджет'),
+        content: const Text(
+          'Зажмите пустое место на домашнем экране → '
+          'нажмите «Виджеты» → найдите AquaTrack → '
+          'перетащите на экран.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Понятно'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addWearTile() async {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Карточка на Wear OS'),
+        content: const Text(
+          '1. Установите AquaTrack на часы через Android Studio\n\n'
+          '2. Откройте приложение на часах — появится диалог добавления карточки\n\n'
+          'Или: Galaxy Wearable → Карточки → + → AquaTrack',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Понятно'),
+          ),
+        ],
       ),
     );
   }
@@ -301,8 +340,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 12),
 
-            // ── Виджет для часов ───────────────────────────────
-            _WearTileCard(onTap: _addWearTile),
+            // ── Виджеты ────────────────────────────────────────
+            _QuickActionCard(
+              icon: Icons.widgets_rounded,
+              title: 'Виджет на экране',
+              subtitle: 'Прогресс воды прямо на рабочем столе',
+              btnLabel: 'Добавить',
+              onTap: _addHomeWidget,
+            ),
+            const SizedBox(height: 10),
+            _QuickActionCard(
+              icon: Icons.watch_rounded,
+              title: 'Карточка на часах',
+              subtitle: 'Wear OS — уровень воды на запястье',
+              btnLabel: 'Настроить',
+              onTap: _addWearTile,
+            ),
 
             const SizedBox(height: 20),
 
@@ -508,9 +561,16 @@ class _NormChip extends StatelessWidget {
   }
 }
 
-class _WearTileCard extends StatelessWidget {
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String btnLabel;
   final VoidCallback onTap;
-  const _WearTileCard({required this.onTap});
+  const _QuickActionCard({
+    required this.icon, required this.title,
+    required this.subtitle, required this.btnLabel, required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -520,38 +580,36 @@ class _WearTileCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.2)),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       child: Row(
         children: [
           Container(
-            width: 44, height: 44,
+            width: 42, height: 42,
             decoration: BoxDecoration(
               color: const Color(0xFF1565C0).withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.watch_rounded, color: Color(0xFF1565C0), size: 22),
+            child: Icon(icon, color: const Color(0xFF1565C0), size: 20),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Карточка на часах',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                 const SizedBox(height: 2),
-                Text('Уровень воды прямо на запястье',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           TextButton(
             onPressed: onTap,
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFF1565C0),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             ),
-            child: const Text('Добавить', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: Text(btnLabel, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           ),
         ],
       ),

@@ -13,6 +13,7 @@ import 'services/notification_service.dart';
 import 'services/api_service.dart';
 import 'services/sync_service.dart';
 import 'services/wear_sync_service.dart';
+import 'services/home_widget_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/history_screen.dart';
@@ -255,6 +256,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     await WearSyncService().pushToWatch(
       currentMl: _todayWater.toInt(),
       goalMl: _dailyGoal.toInt(),
+    );
+
+    // Обновляем виджет на домашнем экране
+    await HomeWidgetService().update(
+      currentMl: _todayWater,
+      goalMl: _dailyGoal,
     );
 
     // Пробуем сразу отправить на сервер
