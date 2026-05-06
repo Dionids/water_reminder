@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/hive_service.dart';
 import '../services/health_service.dart';
 import '../services/auth_service.dart';
+import '../services/wear_sync_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final HiveService hiveService;
@@ -53,6 +54,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (w > 0 && mounted) setState(() => _healthWeight = w);
     } catch (_) {}
     if (mounted) setState(() => _isLoadingFromHealth = false);
+  }
+
+  Future<void> _addWearTile() async {
+    final profile = widget.hiveService.getProfile();
+    final totalMl = await widget.hiveService.getTotalWaterToday();
+    await WearSyncService().pushToWatch(
+      currentMl: totalMl.toInt(),
+      goalMl: profile?.dailyBaseGoal ?? 2000,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Данные отправлены. Откройте AquaTrack на часах — появится диалог добавления карточки.'),
+        duration: Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _saveProfile() async {
@@ -282,6 +299,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // ── Аккаунт ────────────────────────────────────────
             _buildAccountCard(),
 
+            const SizedBox(height: 12),
+
+            // ── Виджет для часов ───────────────────────────────
+            _WearTileCard(onTap: _addWearTile),
+
             const SizedBox(height: 20),
 
             // ── Кнопка сохранить ───────────────────────────────
@@ -480,6 +502,57 @@ class _NormChip extends StatelessWidget {
           Text(label, style: TextStyle(fontSize: 11, color: color)),
           const SizedBox(height: 2),
           Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+class _WearTileCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _WearTileCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1565C0).withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.2)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.watch_rounded, color: Color(0xFF1565C0), size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Карточка на часах',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 2),
+                Text('Уровень воды прямо на запястье',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onTap,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF1565C0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: const Text('Добавить', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
