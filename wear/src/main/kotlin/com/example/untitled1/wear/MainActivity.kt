@@ -1,8 +1,8 @@
 package com.example.untitled1.wear
 
 import android.os.Bundle
-import android.view.View
 import androidx.activity.ComponentActivity
+import androidx.wear.tiles.TileService
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
@@ -21,11 +21,9 @@ class MainActivity : ComponentActivity() {
         setContentView(waterFace)
 
         refreshData()
+        requestTileAddOnce()
 
-        // Нажатие на нижнюю кнопку + (определяем по нижней трети экрана)
-        waterFace.setOnClickListener { view ->
-            val tapY = view.height * 0.72f // нижняя треть
-            // Кнопка + находится примерно на 72% высоты
+        waterFace.setOnClickListener {
             addGlassAndSync()
         }
     }
@@ -36,8 +34,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshData() {
-        val pct = WaterDataStore.getPercent(this)
-        val ml  = WaterDataStore.getCurrentMl(this)
+        val pct  = WaterDataStore.getPercent(this)
+        val ml   = WaterDataStore.getCurrentMl(this)
         val goal = WaterDataStore.getGoalMl(this)
 
         waterFace.setTarget(pct)
@@ -54,8 +52,24 @@ class MainActivity : ComponentActivity() {
         waterFace.currentMl = newMl
         waterFace.goalMl = goal
 
-        // Отправить обновление на телефон
         syncToPhone(newMl, goal)
+    }
+
+    /**
+     * При первом запуске показывает системный диалог:
+     * "Добавить карточку AquaTrack?" → пользователь жмёт Добавить.
+     * Повторно не показывается благодаря флагу tile_requested.
+     */
+    private fun requestTileAddOnce() {
+        val prefs = getSharedPreferences("aquatrack_wear", MODE_PRIVATE)
+        if (prefs.getBoolean("tile_requested", false)) return
+
+        TileService.getUpdater(this)
+            .requestTileAdd(AquaTileService::class.java)
+            .addOnCompleteListener {
+                // Сохраняем флаг независимо от того, согласился пользователь или нет
+                prefs.edit().putBoolean("tile_requested", true).apply()
+            }
     }
 
     /**
@@ -71,6 +85,6 @@ class MainActivity : ComponentActivity() {
 
         dataClient.putDataItem(request)
             .addOnSuccessListener { /* sync ok */ }
-            .addOnFailureListener { /* телефон недоступен — данные уже сохранены локально */ }
+            .addOnFailureListener { /* телефон недоступен — данные сохранены локально */ }
     }
 }
