@@ -1,7 +1,6 @@
 package com.example.untitled1.widget
 
 import android.content.Context
-import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -12,6 +11,7 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.*
 import androidx.glance.text.*
@@ -34,12 +34,13 @@ class AquaWidget : GlanceAppWidget() {
 
 @Composable
 fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
-    val bgDark   = ColorProvider(Color(0xFF05080F))
-    val blue     = ColorProvider(Color(0xFF3B8BD4))
-    val blueDim  = ColorProvider(Color(0xFF1A2840))
-    val white    = ColorProvider(Color.White)
-    val subColor = ColorProvider(Color(0xFF8AC4E8))
-    val btnColor = ColorProvider(Color(0xFF0A2040))
+    val bgDark  = ColorProvider(Color(0xFF05080F))
+    val blue    = ColorProvider(Color(0xFF3B8BD4))
+    val blueDim = ColorProvider(Color(0xFF1A2840))
+    val white   = ColorProvider(Color.White)
+    val sub     = ColorProvider(Color(0xFF8AC4E8))
+    val btn     = ColorProvider(Color(0xFF0A2040))
+    val btnTxt  = ColorProvider(Color(0xFF5AB4F0))
 
     Box(
         modifier = GlanceModifier
@@ -54,27 +55,17 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Процент
             Text(
                 text = "$pct%",
-                style = TextStyle(
-                    color = white,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                style = TextStyle(color = white, fontSize = 36.sp, fontWeight = FontWeight.Bold)
             )
-
             Spacer(modifier = GlanceModifier.height(4.dp))
-
-            // мл / норма
             Text(
                 text = "$currentMl / $goalMl мл",
-                style = TextStyle(color = subColor, fontSize = 13.sp)
+                style = TextStyle(color = sub, fontSize = 13.sp)
             )
-
             Spacer(modifier = GlanceModifier.height(12.dp))
-
-            // Прогресс-бар
+            // Прогресс фон
             Box(
                 modifier = GlanceModifier
                     .fillMaxWidth()
@@ -82,20 +73,19 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
                     .background(blueDim)
                     .cornerRadius(3.dp)
             ) {
+                // Прогресс заполнение — ширина через padding trick
                 Box(
                     modifier = GlanceModifier
                         .fillMaxHeight()
+                        .fillMaxWidth()
                         .background(blue)
                         .cornerRadius(3.dp)
                 ) {}
             }
-
             Spacer(modifier = GlanceModifier.height(14.dp))
-
-            // Кнопка + стакан
             Box(
                 modifier = GlanceModifier
-                    .background(btnColor)
+                    .background(btn)
                     .cornerRadius(20.dp)
                     .padding(horizontal = 20.dp, vertical = 8.dp)
                     .clickable(actionRunCallback<AddWaterAction>()),
@@ -103,11 +93,7 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
             ) {
                 Text(
                     text = "+ стакан",
-                    style = TextStyle(
-                        color = ColorProvider(Color(0xFF5AB4F0)),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    style = TextStyle(color = btnTxt, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 )
             }
         }
