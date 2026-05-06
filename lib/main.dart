@@ -12,6 +12,7 @@ import 'services/health_service.dart';
 import 'services/notification_service.dart';
 import 'services/api_service.dart';
 import 'services/sync_service.dart';
+import 'services/wear_sync_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/history_screen.dart';
@@ -181,6 +182,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
   double _animatedProgress = 0;
+  // ignore: cancel_subscriptions
+  StreamSubscription<int>? _wearSubscription;
 
   @override
   void initState() {
@@ -205,10 +208,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _uiRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+
+    // Слушаем нажатие + с Wear OS часов
+    _wearSubscription = WearSyncService().watchAddWaterStream.listen((addedMl) {
+      _addWater(addedMl.toDouble());
+    });
   }
 
   @override
   void dispose() {
+    _wearSubscription?.cancel();
     _autoSyncTimer?.cancel();
     _uiRefreshTimer?.cancel();
     _progressController.dispose();
@@ -241,6 +250,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final log = await widget.hiveService.addWaterLog(amount);
     await _loadData();
     await widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal);
+
+    // Синхронизируем на часы
+    await WearSyncService().pushToWatch(
+      currentMl: _todayTotal.toInt(),
+      goalMl: _dailyGoal.toInt(),
+    );
 
     // Пробуем сразу отправить на сервер
     final profile = widget.hiveService.getProfile();

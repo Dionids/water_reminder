@@ -58,6 +58,20 @@
                 android:value="androidx.startup" />
         </provider>
 
+
+        <!-- Слушатель данных от Wear OS часов -->
+        <service
+            android:name=".WearDataListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/aquatrack"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
     </application>
 
     <queries>
