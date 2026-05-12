@@ -7,17 +7,10 @@ import android.content.IntentFilter
 import android.util.Log
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
-import com.google.android.gms.wearable.MessageClient
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-/**
- * Регистрирует MethodChannel и EventChannel для связи Flutter ↔ Wear OS.
- *
- * Вызывать из MainActivity.configureFlutterEngine():
- *   WearSyncChannel.register(context, flutterEngine)
- */
 object WearSyncChannel {
 
     private const val METHOD_CHANNEL = "com.example.untitled1/wear_sync"
@@ -30,7 +23,6 @@ object WearSyncChannel {
     fun register(context: Context, flutterEngine: FlutterEngine) {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
 
-        // MethodChannel: Flutter → Wear (отправить данные на часы)
         MethodChannel(messenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "syncToWatch" -> {
@@ -51,13 +43,11 @@ object WearSyncChannel {
             }
         }
 
-        // EventChannel: Wear → Flutter (нажатие + на часах)
         EventChannel(messenger, EVENT_CHANNEL).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, sink: EventChannel.EventSink?) {
                 eventSink = sink
                 registerBroadcastReceiver(context)
             }
-
             override fun onCancel(arguments: Any?) {
                 eventSink = null
                 unregisterReceiver(context)
@@ -78,9 +68,42 @@ object WearSyncChannel {
             .addOnFailureListener { Log.w(TAG, "Watch not connected: ${it.message}") }
     }
 
-    /**
-     * Отправляет запланированное напоминание на часы через MessageClient.
-     * Часы получат сообщение в DataListenerService.onMessageReceived()
-     * и покажут локальное уведомление в нужное время.
-     */
-    private fun scheduleRemin
+    private fun scheduleReminderOnWatch(
+        context: Context,
+        scheduledAt: Long,
+        glassIndex: Int,
+        totalGlasses: Int,
+    ) {
+        val request = PutDataMapRequest.create("/aquatrack/reminder/$glassIndex").apply {
+            dataMap.putLong("scheduled_at",  scheduledAt)
+            dataMap.putInt("glass_index",    glassIndex)
+            dataMap.putInt("total_glasses",  totalGlasses)
+            dataMap.putLong("created_at", System.currentTimeMillis())
+        }.asPutDataRequest().setUrgent()
+
+        Wearable.getDataClient(context)
+            .putDataItem(request)
+            .addOnSuccessListener { Log.d(TAG, "Reminder $glassIndex/$totalGlasses scheduled on watch") }
+            .addOnFailureListener { Log.w(TAG, "Watch not connected for reminder: ${it.message}") }
+    }
+
+    private fun registerBroadcastReceiver(context: Context) {
+        receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action == WearDataListenerService.ACTION_WATER_FROM_WEAR) {
+                    val addedMl = 200
+                    eventSink?.success(mapOf("added_ml" to addedMl))
+                }
+            }
+        }
+        val filter = IntentFilter(WearDataListenerService.ACTION_WATER_FROM_WEAR)
+        context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    }
+
+    private fun unregisterReceiver(context: Context) {
+        receiver?.let {
+            try { context.unregisterReceiver(it) } catch (_: Exception) {}
+        }
+        receiver = null
+    }
+}
