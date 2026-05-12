@@ -91,7 +91,8 @@ object WearSyncChannel {
         receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent?.action == WearDataListenerService.ACTION_WATER_FROM_WEAR) {
-                    val addedMl = 200
+                    // Читаем добавленный объём из intent (от часов или виджета)
+                    val addedMl = intent.getIntExtra("added_ml", 250)
                     eventSink?.success(mapOf("added_ml" to addedMl))
                 }
             }

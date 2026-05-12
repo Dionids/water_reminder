@@ -38,17 +38,17 @@ class MainActivity : ComponentActivity() {
 
         waterFace.setTarget(pct)
         waterFace.currentMl = ml
-        waterFace.goalMl = goal
+        waterFace.goalMl    = goal
     }
 
     private fun addGlassAndSync() {
-        val newMl = WaterDataStore.addGlass(this, glassML = 200)
+        val newMl = WaterDataStore.addGlass(this, glassML = WaterDataStore.GLASS_ML)
         val goal  = WaterDataStore.getGoalMl(this)
         val pct   = WaterDataStore.getPercent(this)
 
         waterFace.setTarget(pct)
         waterFace.currentMl = newMl
-        waterFace.goalMl = goal
+        waterFace.goalMl    = goal
 
         syncToPhone(newMl, goal)
     }
@@ -60,7 +60,8 @@ class MainActivity : ComponentActivity() {
     private fun syncToPhone(currentMl: Int, goalMl: Int) {
         val request = PutDataMapRequest.create("/aquatrack/add_water").apply {
             dataMap.putInt("current_ml", currentMl)
-            dataMap.putInt("goal_ml", goalMl)
+            dataMap.putInt("goal_ml",    goalMl)
+            dataMap.putInt("added_ml",   WaterDataStore.GLASS_ML)
             dataMap.putLong("timestamp", System.currentTimeMillis())
         }.asPutDataRequest().setUrgent()
 

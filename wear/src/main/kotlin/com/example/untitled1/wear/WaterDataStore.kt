@@ -9,10 +9,12 @@ import android.content.SharedPreferences
  */
 object WaterDataStore {
 
-    private const val PREFS_NAME = "aquatrack_wear"
+    private const val PREFS_NAME    = "aquatrack_wear"
     private const val KEY_CURRENT_ML = "current_ml"
-    private const val KEY_GOAL_ML = "goal_ml"
-    private const val KEY_LAST_SYNC = "last_sync"
+    private const val KEY_GOAL_ML    = "goal_ml"
+    private const val KEY_LAST_SYNC  = "last_sync"
+
+    const val GLASS_ML = 250   // стакан 250 мл
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -35,10 +37,10 @@ object WaterDataStore {
     }
 
     /** Добавить стакан воды локально на часах и вернуть новое значение */
-    fun addGlass(context: Context, glassML: Int = 200): Int {
+    fun addGlass(context: Context, glassML: Int = GLASS_ML): Int {
         val current = getCurrentMl(context)
-        val goal = getGoalMl(context)
-        val newVal = (current + glassML).coerceAtMost(goal)
+        val goal    = getGoalMl(context)
+        val newVal  = (current + glassML).coerceAtMost(goal)
         saveWaterData(context, newVal, goal)
         return newVal
     }

@@ -19,7 +19,7 @@ class WaterFaceCanvas @JvmOverloads constructor(
 ) : View(context, attrs, defStyle) {
 
     // --- Данные ---
-    var waterPercent: Int = 70
+    var waterPercent: Int = 0
         set(value) { field = value.coerceIn(0, 100); invalidate() }
     var currentMl: Int = 0
     var goalMl: Int = 2000
@@ -28,7 +28,7 @@ class WaterFaceCanvas @JvmOverloads constructor(
     private var waveOffset1 = 0f
     private var waveOffset2 = 0f
     private var animatedPercent = 0f      // плавное изменение уровня воды
-    private var targetPercent = 70f
+    private var targetPercent = 0f
 
     private val handler = Handler(Looper.getMainLooper())
     private val animRunnable = object : Runnable {
@@ -45,9 +45,6 @@ class WaterFaceCanvas @JvmOverloads constructor(
     // --- Краски ---
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#05080f")
-    }
-    private val waterBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#060c18")
     }
     private val waterFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#0e3060")
@@ -81,13 +78,18 @@ class WaterFaceCanvas @JvmOverloads constructor(
     }
     private val pctTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 72f
+        textSize = 68f
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val mlTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#8ac4e8")
-        textSize = 24f
+        textSize = 22f
+        textAlign = Paint.Align.CENTER
+    }
+    private val remainTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#5ab4f0")
+        textSize = 20f
         textAlign = Paint.Align.CENTER
     }
     private val btnCirclePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -118,7 +120,7 @@ class WaterFaceCanvas @JvmOverloads constructor(
         super.onDraw(canvas)
         val cx = width / 2f
         val cy = height / 2f
-        val r = width / 2f
+        val r  = width / 2f
 
         canvas.save()
         canvas.clipPath(clipPath)
@@ -134,10 +136,10 @@ class WaterFaceCanvas @JvmOverloads constructor(
         canvas.drawRect(0f, waterTop + amp, width.toFloat(), height.toFloat(), waterFillPaint)
 
         // 4 слоя волн
-        drawWave(canvas, waterTop + 12f,  amp,       waveOffset1, wave1Paint)
+        drawWave(canvas, waterTop + 12f,  amp,        waveOffset1, wave1Paint)
         drawWave(canvas, waterTop + 6f,   amp * .75f, -waveOffset2 + width, wave2Paint)
-        drawWave(canvas, waterTop + 16f,  amp * .5f,  waveOffset1 * .6f, wave3Paint)
-        drawWave(canvas, waterTop + 4f,   amp * .3f, -waveOffset1 * .4f + width, wave4Paint)
+        drawWave(canvas, waterTop + 16f,  amp * .5f,   waveOffset1 * .6f, wave3Paint)
+        drawWave(canvas, waterTop + 4f,   amp * .3f,  -waveOffset1 * .4f + width, wave4Paint)
 
         canvas.restore()
 
@@ -145,17 +147,23 @@ class WaterFaceCanvas @JvmOverloads constructor(
         canvas.drawCircle(cx, cy, r - 3f, borderPaint)
         canvas.drawCircle(cx, cy, r - 5f, borderInnerPaint)
 
-        // Текст процента
-        val textY = cy - 20f
-        pctTextPaint.color = if (waterPercent >= 100) Color.parseColor("#a0d8f8") else Color.WHITE
-        canvas.drawText("${waterPercent}%", cx, textY, pctTextPaint)
+        // Текст процента — центр
+        val pctY = cy - 16f
+        pctTextPaint.color =
+            if (waterPercent >= 100) Color.parseColor("#a0d8f8") else Color.WHITE
+        canvas.drawText("${waterPercent}%", cx, pctY, pctTextPaint)
 
-        // Текст мл
-        val mlStr = "${formatNum(currentMl)} мл из ${formatNum(goalMl)}"
-        canvas.drawText(mlStr, cx, textY + 38f, mlTextPaint)
+        // "X мл из Y мл"
+        val mlStr = "${formatNum(currentMl)} / ${formatNum(goalMl)} мл"
+        canvas.drawText(mlStr, cx, pctY + 34f, mlTextPaint)
+
+        // "осталось X мл"
+        val remaining = (goalMl - currentMl).coerceAtLeast(0)
+        val remainStr = if (remaining == 0) "норма выполнена!" else "осталось ${formatNum(remaining)} мл"
+        canvas.drawText(remainStr, cx, pctY + 58f, remainTextPaint)
 
         // Кнопка + внизу
-        val btnY = cy + r * 0.6f
+        val btnY = cy + r * 0.62f
         val btnR = r * 0.22f
         canvas.drawCircle(cx, btnY, btnR, btnCirclePaint)
         canvas.drawCircle(cx, btnY, btnR, btnBorderPaint)
@@ -186,13 +194,12 @@ class WaterFaceCanvas @JvmOverloads constructor(
         canvas.restore()
     }
 
-    private fun formatNum(n: Int): String {
-        return if (n >= 1000) "${n / 1000} ${n % 1000}".trim() else n.toString()
-    }
+    private fun formatNum(n: Int): String =
+        if (n >= 1000) "${n / 1000} ${n % 1000}" else n.toString()
 
     fun setTarget(pct: Int) {
         targetPercent = pct.toFloat()
-        waterPercent = pct
+        waterPercent  = pct
     }
 
     override fun onAttachedToWindow() {

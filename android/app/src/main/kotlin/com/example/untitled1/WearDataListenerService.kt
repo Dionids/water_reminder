@@ -11,19 +11,19 @@ import com.google.android.gms.wearable.WearableListenerService
  *
  * Когда пользователь нажал + на часах, часы отправляют новое значение
  * через DataClient в /aquatrack/add_water. Этот сервис:
- *  1. Принимает новое значение currentMl
- *  2. Сохраняет локально через Hive (через broadcast)
- *  3. Запускает фоновую синхронизацию на сервер
- *
- * Регистрация в AndroidManifest.xml уже выполнена ниже в комментарии.
+ *  1. Принимает новое значение currentMl и added_ml
+ *  2. Отправляет broadcast — WearSyncChannel пробрасывает его в Flutter EventChannel
+ *  3. Flutter вызывает _addWater(addedMl) и пишет в Hive
  */
 class WearDataListenerService : WearableListenerService() {
 
     companion object {
         const val ACTION_WATER_FROM_WEAR = "com.example.untitled1.WATER_FROM_WEAR"
         const val EXTRA_CURRENT_ML = "current_ml"
-        const val EXTRA_GOAL_ML = "goal_ml"
+        const val EXTRA_GOAL_ML    = "goal_ml"
+        const val EXTRA_ADDED_ML   = "added_ml"
         private const val TAG = "WearDataListener"
+        private const val DEFAULT_GLASS_ML = 250
     }
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
@@ -32,19 +32,19 @@ class WearDataListenerService : WearableListenerService() {
             Log.d(TAG, "Data changed: $path")
 
             if (path == "/aquatrack/add_water") {
-                val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
+                val dataMap   = DataMapItem.fromDataItem(event.dataItem).dataMap
                 val currentMl = dataMap.getInt("current_ml", -1)
                 val goalMl    = dataMap.getInt("goal_ml", -1)
-                val timestamp = dataMap.getLong("timestamp", 0L)
+                val addedMl   = dataMap.getInt("added_ml", DEFAULT_GLASS_ML)
 
                 if (currentMl >= 0 && goalMl > 0) {
-                    Log.d(TAG, "Received from watch: $currentMl ml / $goalMl ml")
+                    Log.d(TAG, "Received from watch: +$addedMl ml → total $currentMl/$goalMl ml")
 
-                    // Отправить broadcast — Flutter слушает через MethodChannel или
-                    // можно обработать нативно через SharedPreferences + home_widget
                     val intent = Intent(ACTION_WATER_FROM_WEAR).apply {
                         putExtra(EXTRA_CURRENT_ML, currentMl)
-                        putExtra(EXTRA_GOAL_ML, goalMl)
+                        putExtra(EXTRA_GOAL_ML,    goalMl)
+                        putExtra(EXTRA_ADDED_ML,   addedMl)
+                        putExtra("added_ml",       addedMl)   // для WearSyncChannel.BroadcastReceiver
                         setPackage(packageName)
                     }
                     sendBroadcast(intent)
@@ -53,19 +53,3 @@ class WearDataListenerService : WearableListenerService() {
         }
     }
 }
-
-/*
- * Добавить в android/app/src/main/AndroidManifest.xml внутрь <application>:
- *
- * <service
- *     android:name=".WearDataListenerService"
- *     android:exported="true">
- *     <intent-filter>
- *         <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
- *         <data
- *             android:host="*"
- *             android:pathPrefix="/aquatrack"
- *             android:scheme="wear" />
- *     </intent-filter>
- * </service>
- */
