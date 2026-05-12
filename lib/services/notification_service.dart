@@ -1,20 +1,32 @@
+import 'dart:typed_data';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'hive_service.dart';
 import 'health_service.dart';
+import 'wear_sync_service.dart';
 
 class NotificationService {
-  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
   final HiveService hiveService;
   final HealthService healthService;
+
+  /// Объём одного стакана в мл
+  static const int _glassMl = 250;
+
+  /// Базовый ID для запланированных напоминаний (IDs 100–199)
+  static const int _reminderIdBase = 100;
+  static const int _maxReminders   = 100;
 
   NotificationService({required this.hiveService, required this.healthService});
 
   Future<void> init() async {
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-        
-    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
+
+    const DarwinInitializationSettings iosSettings =
+        DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
@@ -28,48 +40,33 @@ class NotificationService {
     await _notifications.initialize(settings);
   }
 
-  // Smart check before showing notification
+  // ── Умное разовое напоминание ─────────────────────────────────
+
   Future<void> showHydrationReminder({required int dailyGoal}) async {
     try {
-      // 1. Check progress
       final currentWater = await hiveService.getTotalWaterToday();
       if (currentWater >= dailyGoal) {
-        debugPrint('Smart Notification: Goal already reached. Skipping.');
+        debugPrint('Smart Notification: цель достигнута, пропускаем.');
         return;
       }
 
-      // 2. Check sleep status
       final isAsleep = await healthService.isUserAsleep();
       if (isAsleep) {
-        debugPrint('Smart Notification: User is asleep. Skipping.');
+        debugPrint('Smart Notification: пользователь спит, пропускаем.');
         return;
       }
 
-      // 3. Show notification
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
         'hydration_id',
         'Hydration Reminders',
-        channelDescription: 'Reminds you to drink water based on your activity',
+        channelDescription:
+            'Reminds you to drink water based on your activity',
         importance: Importance.high,
         priority: Priority.high,
       );
 
-      const NotificationDetails details = NotificationDetails(android: androidDetails);
-
       await _notifications.show(
         0,
-        'Time to drink water! 💧',
-        'You have reached only ${((currentWater / dailyGoal) * 100).toInt()}% of your goal.',
-        details,
-      );
-    } catch (e) {
-      debugPrint('Notification Service Error: $e');
-    }
-  }
-
-  Future<void> requestPermissions() async {
-    await _notifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-  }
-}
+        '💧 Время выпить воду!',
+        'Выпито ${((currentWater / dailyGoal) * 100).toInt()}% �

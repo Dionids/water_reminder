@@ -479,21 +479,10 @@ class HealthService {
     return double.tryParse(val.toString()) ?? 0.0;
   }
 
-  Future<bool> isUserAsleep() async {
-    await _configure();
-    final now = DateTime.now();
-    try {
-      final data = await _health.getHealthDataFromTypes(
-        types: [HealthDataType.SLEEP_ASLEEP],
-        startTime: now.subtract(const Duration(hours: 24)),
-        endTime: now,
-      );
-      if (data.isEmpty) return false;
-      return data.any(
-        (p) => now.isAfter(p.dateFrom) && now.isBefore(p.dateTo),
-      );
-    } catch (e) {
-      return false;
-    }
-  }
-}
+  // ── Анализ сна ───────────────────────────────────────────────
+
+  /// Возвращает окно бодрствования на сегодня: время пробуждения и время отхода ко сну.
+  ///
+  /// Логика:
+  /// - Ищет последний завершённый сеанс сна за последние 24 часа.
+  /// - Время пр

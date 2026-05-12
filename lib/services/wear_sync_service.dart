@@ -34,12 +34,12 @@ class WearSyncService {
     }
   }
 
-  /// Слушать события от часов (нажатие + на часах).
-  /// Вернёт Stream с количеством мл, которые часы просят добавить.
-  Stream<int> get watchAddWaterStream {
-    if (!Platform.isAndroid) return const Stream.empty();
-    return const EventChannel('com.example.untitled1/wear_events')
-        .receiveBroadcastStream()
-        .map((event) => (event as Map)['added_ml'] as int? ?? 200);
-  }
-}
+  /// Отправить на часы запланированное напоминание выпить воду.
+  ///
+  /// [scheduledAt]  — время напоминания в миллисекундах (epoch)
+  /// [glassIndex]   — номер текущего стакана (1-based)
+  /// [totalGlasses] — всего стаканов за день
+  Future<void> sendReminderToWatch({
+    required int scheduledAt,
+    required int glassIndex,
+    required in

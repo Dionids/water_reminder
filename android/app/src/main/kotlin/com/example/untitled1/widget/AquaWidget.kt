@@ -18,10 +18,13 @@ import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.example.untitled1.MainActivity
 
+// Фиксированная ширина прогресс-бара в dp (подходит для 2-ячеечного виджета)
+private const val PROGRESS_BAR_WIDTH_DP = 160
+
 class AquaWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val prefs     = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val currentMl = prefs.getFloat("flutter.widget_current_ml", 0f).toInt()
         val goalMl    = prefs.getFloat("flutter.widget_goal_ml", 2000f).toInt()
         val pct       = if (goalMl > 0) (currentMl * 100 / goalMl).coerceIn(0, 100) else 0
@@ -34,13 +37,16 @@ class AquaWidget : GlanceAppWidget() {
 
 @Composable
 fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
-    val bgDark  = ColorProvider(Color(0xFF05080F))
-    val blue    = ColorProvider(Color(0xFF3B8BD4))
-    val blueDim = ColorProvider(Color(0xFF1A2840))
-    val white   = ColorProvider(Color.White)
-    val sub     = ColorProvider(Color(0xFF8AC4E8))
-    val btn     = ColorProvider(Color(0xFF0A2040))
-    val btnTxt  = ColorProvider(Color(0xFF5AB4F0))
+    val bgDark = ColorProvider(Color(0xFF05080F))
+    val blue   = ColorProvider(Color(0xFF3B8BD4))
+    val blueDim= ColorProvider(Color(0xFF1A2840))
+    val white  = ColorProvider(Color.White)
+    val sub    = ColorProvider(Color(0xFF8AC4E8))
+    val btn    = ColorProvider(Color(0xFF0A2040))
+    val btnTxt = ColorProvider(Color(0xFF5AB4F0))
+
+    // Ширина заполненной части в dp (пропорционально проценту)
+    val fillDp = (PROGRESS_BAR_WIDTH_DP * pct / 100).dp
 
     Box(
         modifier = GlanceModifier
@@ -55,51 +61,46 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Процент
             Text(
                 text = "$pct%",
-                style = TextStyle(color = white, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                style = TextStyle(
+                    color = white,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             )
             Spacer(modifier = GlanceModifier.height(4.dp))
+
+            // мл / норма
             Text(
                 text = "$currentMl / $goalMl мл",
                 style = TextStyle(color = sub, fontSize = 13.sp)
             )
             Spacer(modifier = GlanceModifier.height(12.dp))
-            // Прогресс фон
+
+            // Прогресс-бар: фон + заполнение
             Box(
                 modifier = GlanceModifier
-                    .fillMaxWidth()
+                    .width(PROGRESS_BAR_WIDTH_DP.dp)
                     .height(6.dp)
                     .background(blueDim)
-                    .cornerRadius(3.dp)
+                    .cornerRadius(3.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
-                // Прогресс заполнение — ширина через padding trick
-                Box(
-                    modifier = GlanceModifier
-                        .fillMaxHeight()
-                        .fillMaxWidth()
-                        .background(blue)
-                        .cornerRadius(3.dp)
-                ) {}
+                // Заполненная часть — фиксированная ширина пропорционально pct
+                if (pct > 0) {
+                    Box(
+                        modifier = GlanceModifier
+                            .width(fillDp.coerceAtLeast(4.dp))
+                            .height(6.dp)
+                            .background(blue)
+                            .cornerRadius(3.dp)
+                    ) {}
+                }
             }
             Spacer(modifier = GlanceModifier.height(14.dp))
-            Box(
-                modifier = GlanceModifier
-                    .background(btn)
-                    .cornerRadius(20.dp)
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                    .clickable(actionRunCallback<AddWaterAction>()),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "+ стакан",
-                    style = TextStyle(color = btnTxt, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                )
-            }
-        }
-    }
-}
 
-class AquaWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = AquaWidget()
-}
+            // Кнопка + стакан
+            Box(
+   

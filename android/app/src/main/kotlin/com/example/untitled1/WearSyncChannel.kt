@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.util.Log
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import com.google.android.gms.wearable.MessageClient
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -37,6 +38,13 @@ object WearSyncChannel {
                     val goalMl    = call.argument<Int>("goal_ml") ?: 2000
                     val timestamp = call.argument<Long>("timestamp") ?: 0L
                     sendDataToWatch(context, currentMl, goalMl, timestamp)
+                    result.success(null)
+                }
+                "scheduleWatchReminder" -> {
+                    val scheduledAt  = call.argument<Long>("scheduled_at") ?: 0L
+                    val glassIndex   = call.argument<Int>("glass_index") ?: 1
+                    val totalGlasses = call.argument<Int>("total_glasses") ?: 1
+                    scheduleReminderOnWatch(context, scheduledAt, glassIndex, totalGlasses)
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -70,23 +78,9 @@ object WearSyncChannel {
             .addOnFailureListener { Log.w(TAG, "Watch not connected: ${it.message}") }
     }
 
-    private fun registerBroadcastReceiver(context: Context) {
-        receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent?.action == WearDataListenerService.ACTION_WATER_FROM_WEAR) {
-                    val addedMl = 200 // всегда стакан 200мл с часов
-                    eventSink?.success(mapOf("added_ml" to addedMl))
-                }
-            }
-        }
-        val filter = IntentFilter(WearDataListenerService.ACTION_WATER_FROM_WEAR)
-        context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-    }
-
-    private fun unregisterReceiver(context: Context) {
-        receiver?.let {
-            try { context.unregisterReceiver(it) } catch (_: Exception) {}
-        }
-        receiver = null
-    }
-}
+    /**
+     * Отправляет запланированное напоминание на часы через MessageClient.
+     * Часы получат сообщение в DataListenerService.onMessageReceived()
+     * и покажут локальное уведомление в нужное время.
+     */
+    private fun scheduleRemin

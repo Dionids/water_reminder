@@ -389,6 +389,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           _flushWaterLogs(profile!.firebaseUid!);
         }
 
+        // Планируем уведомления на основе данных сна
+        _scheduleWaterReminders(newGoal);
+
         if (!silent) _showSnackBar('Норма обновлена: $newGoal мл 💧');
       } else {
         // Офлайн — считаем локально, но время синхронизации всё равно обновляем
@@ -401,10 +404,27 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           profile.lastSync = DateTime.now();
           await widget.hiveService.saveProfile(profile);
         }
+        // Планируем уведомления и в офлайн-режиме
+        _scheduleWaterReminders(_dailyGoal);
         if (!silent) _showSnackBar('Синхронизировано (офлайн)');
       }
     } finally {
       if (mounted) setState(() => _isSyncing = false);
+    }
+  }
+
+  /// Читает данные сна из Health Connect и планирует уведомления о воде.
+  /// Вызывается после каждой синхронизации активности.
+  Future<void> _scheduleWaterReminders(int goalMl) async {
+    try {
+      final sleepWindow = await widget.healthService.fetchSleepWindow();
+      await widget.notificationService.scheduleDailyWaterReminders(
+        wakeTime: sleepWindow.wakeTime,
+        bedTime:  sleepWindow.bedTime,
+        goalMl:   goalMl,
+      );
+    } catch (e) {
+      debugPrint('_scheduleWaterReminders error: $e');
     }
   }
 
@@ -1016,30 +1036,4 @@ class _SyncFooter extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.4)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: Colors.white, size: 14),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Данные устарели · ${syncState.label}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            )
-          : Text(
-              key: const ValueKey('fresh'),
-              '🔄 ${syncState.label}',
-              style: TextStyle(
-                  color: Colors.white.withOpacity(0.65), fontSize: 12),
-            ),
-    );
-  }
-}
+                border: Border.all(color: Colors.whit
