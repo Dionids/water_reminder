@@ -123,7 +123,10 @@ class MyApp extends StatelessWidget {
               healthService: healthService,
               notificationService: notificationService,
             ),
-        '/onboarding': (context) => OnboardingScreen(hiveService: hiveService),
+        '/onboarding': (context) => OnboardingScreen(
+              hiveService: hiveService,
+              healthService: healthService,
+            ),
         '/history': (context) => HistoryScreen(hiveService: hiveService),
         '/profile': (context) => ProfileScreen(
               hiveService: hiveService,
@@ -232,8 +235,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _todayWater = total;
       if (profile?.dailyBaseGoal != null) _dailyGoal = profile!.dailyBaseGoal!;
       _lastSyncTime = profile?.lastSync;
+      // Показываем вес из профиля пока Health Connect не вернёт данные
+      if (_weight == 0.0 && (profile?.weight ?? 0) > 0) {
+        _weight = profile!.weight!;
+      }
     });
     _animateProgress(total / _dailyGoal);
+
+    // Синхронизируем виджет на домашнем экране при каждой загрузке данных
+    await HomeWidgetService().update(
+      currentMl: total,
+      goalMl: _dailyGoal.toDouble(),
+    );
   }
 
   void _animateProgress(double target) {
@@ -342,9 +355,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final workoutIntensity = data['workoutIntensity'] as WorkoutIntensity;
       final activityNames   = data['activityNames']    as List<String>;
 
+      final profile2 = widget.hiveService.getProfile();
       setState(() {
-        _steps = steps; _weight = weight; _calories = calories;
-        _distance = distance; _heartRate = heartRate;
+        _steps = steps;
+        // Если Health Connect не вернул вес — используем сохранённый в профиле
+        _weight = weight > 0 ? weight : (profile2?.weight ?? 0.0);
+        _calories = calories;
+        _distance = distance;
+        _heartRate = heartRate;
         _workoutMinutes = workoutMinutes;
         _workoutIntensity = workoutIntensity;
         _activityNames = activityNames;
@@ -606,8 +624,10 @@ class _HeroWaterCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 340;
+        return Padding(
+        padding: EdgeInsets.all(isSmall ? 16 : 24),
         child: Column(
           children: [
             // Прогресс-бар волна
@@ -619,9 +639,9 @@ class _HeroWaterCard extends StatelessWidget {
                     children: [
                       Text(
                         '${todayWater.toInt()} мл',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 40,
+                          fontSize: isSmall ? 30 : 40,
                           fontWeight: FontWeight.w800,
                           height: 1,
                         ),
@@ -631,7 +651,7 @@ class _HeroWaterCard extends StatelessWidget {
                         'из $dailyGoal мл',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 16,
+                          fontSize: isSmall ? 13 : 16,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -701,7 +721,8 @@ class _HeroWaterCard extends StatelessWidget {
             _SyncFooter(syncState: syncState),
           ],
         ),
-      ),
+        );
+      }),
     );
   }
 }
@@ -896,14 +917,18 @@ class _HealthStatsGrid extends StatelessWidget {
           child: Text('Health Connect',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         ),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.7,
-          children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final tileWidth = (constraints.maxWidth - 12) / 2;
+            final aspectRatio = (tileWidth / 90).clamp(1.2, 2.0);
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: aspectRatio,
+              children: [
             _StatTile(icon: Icons.directions_walk_rounded, label: 'Шаги', value: '$steps', color: const Color(0xFF43A047)),
             _StatTile(icon: Icons.monitor_weight_rounded, label: 'Вес',
                 value: weight > 0 ? '${weight.toStringAsFixed(1)} кг' : '—', color: const Color(0xFF8E24AA)),
@@ -916,6 +941,8 @@ class _HealthStatsGrid extends StatelessWidget {
             _StatTile(icon: Icons.fitness_center_rounded, label: 'Тренировка',
                 value: workoutValue, color: const Color(0xFFFF6F00)),
           ],
+            );
+          },
         ),
       ],
     );
