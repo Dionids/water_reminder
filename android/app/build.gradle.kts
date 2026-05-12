@@ -47,4 +47,14 @@ dependencies {
     // Compose runtime (нужен Glance)
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(composeBom)
-    implementation("androidx.compo
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.compose.ui:ui")
+
+    // Jetpack Glance — виджет на домашний экран
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-material3:1.1.0")
+}
+
+flutter {
+    source = "../.."
+}

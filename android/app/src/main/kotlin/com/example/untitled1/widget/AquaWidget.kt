@@ -18,7 +18,6 @@ import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import com.example.untitled1.MainActivity
 
-// Фиксированная ширина прогресс-бара в dp (подходит для 2-ячеечного виджета)
 private const val PROGRESS_BAR_WIDTH_DP = 160
 
 class AquaWidget : GlanceAppWidget() {
@@ -45,7 +44,6 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
     val btn    = ColorProvider(Color(0xFF0A2040))
     val btnTxt = ColorProvider(Color(0xFF5AB4F0))
 
-    // Ширина заполненной части в dp (пропорционально проценту)
     val fillDp = (PROGRESS_BAR_WIDTH_DP * pct / 100).dp
 
     Box(
@@ -61,25 +59,16 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Процент
             Text(
                 text = "$pct%",
-                style = TextStyle(
-                    color = white,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+                style = TextStyle(color = white, fontSize = 36.sp, fontWeight = FontWeight.Bold)
             )
             Spacer(modifier = GlanceModifier.height(4.dp))
-
-            // мл / норма
             Text(
                 text = "$currentMl / $goalMl мл",
                 style = TextStyle(color = sub, fontSize = 13.sp)
             )
             Spacer(modifier = GlanceModifier.height(12.dp))
-
-            // Прогресс-бар: фон + заполнение
             Box(
                 modifier = GlanceModifier
                     .width(PROGRESS_BAR_WIDTH_DP.dp)
@@ -88,7 +77,6 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
                     .cornerRadius(3.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                // Заполненная часть — фиксированная ширина пропорционально pct
                 if (pct > 0) {
                     Box(
                         modifier = GlanceModifier
@@ -100,7 +88,23 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int) {
                 }
             }
             Spacer(modifier = GlanceModifier.height(14.dp))
-
-            // Кнопка + стакан
             Box(
-   
+                modifier = GlanceModifier
+                    .background(btn)
+                    .cornerRadius(20.dp)
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .clickable(actionRunCallback<AddWaterAction>()),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "+ стакан",
+                    style = TextStyle(color = btnTxt, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                )
+            }
+        }
+    }
+}
+
+class AquaWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = AquaWidget()
+}
