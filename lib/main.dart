@@ -1063,4 +1063,32 @@ class _SyncFooter extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.whit
+                border: Border.all(color: Colors.white.withOpacity(0.4)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.white.withOpacity(0.9),
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Данные устарели',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ],
+              ),
+            )
+          : Text(
+              syncState.label,
+              key: const ValueKey('fresh'),
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 12,
+              ),
+            ),
+    );
+  }
+}
