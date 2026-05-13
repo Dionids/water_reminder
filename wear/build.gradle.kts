@@ -45,8 +45,15 @@ dependencies {
 
     implementation("androidx.wear.compose:compose-material:1.3.1")
     implementation("androidx.wear.compose:compose-foundation:1.3.1")
+
+    // Wear OS Tiles
     implementation("androidx.wear.tiles:tiles:1.4.0")
     implementation("androidx.wear.tiles:tiles-material:1.4.0")
+
+    // Horologist — SuspendingTileService (coroutine-friendly TileService wrapper)
+    implementation("com.google.android.horologist:horologist-tiles:0.6.17")
+    implementation("com.google.android.horologist:horologist-annotations:0.6.17")
+
     implementation("androidx.wear.watchface:watchface-complications-data-source:1.2.1")
 
     implementation("com.google.android.gms:play-services-wearable:18.2.0")

@@ -28,7 +28,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Tile Service — плитка на часах -->
+        <!-- Tile Service — карточка свайпом влево от циферблата -->
         <service
             android:name=".AquaTileService"
             android:exported="true"
@@ -47,4 +47,23 @@
             android:name=".DataListenerService"
             android:exported="true">
             <intent-filter>
-                <act
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/aquatrack"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
+        <!-- BroadcastReceiver для будильников-напоминаний о воде -->
+        <receiver
+            android:name=".WaterReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

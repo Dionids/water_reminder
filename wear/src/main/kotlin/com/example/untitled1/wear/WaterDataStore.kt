@@ -10,6 +10,7 @@ import android.content.SharedPreferences
 object WaterDataStore {
 
     private const val PREFS_NAME    = "aquatrack_wear"
+    const val PREFS_NAME_CONST    = "aquatrack_wear"  // public для MainActivity
     private const val KEY_CURRENT_ML = "current_ml"
     private const val KEY_GOAL_ML    = "goal_ml"
     private const val KEY_LAST_SYNC  = "last_sync"
