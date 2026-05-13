@@ -1,9 +1,9 @@
 package com.example.untitled1.widget
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.*
@@ -22,9 +22,11 @@ import com.example.untitled1.MainActivity
 class AquaWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        // Flutter SharedPreferences хранит Int под ключом "flutter.<key>"
+        // home_widget_service.dart записывает через SharedPreferences.setInt()
         val prefs     = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val currentMl = prefs.getFloat("flutter.widget_current_ml", 0f).toInt()
-        val goalMl    = prefs.getFloat("flutter.widget_goal_ml", 2000f).toInt()
+        val currentMl = readInt(prefs, "widget_current_ml", 0)
+        val goalMl    = readInt(prefs, "widget_goal_ml", 2000)
         val pct       = if (goalMl > 0) (currentMl * 100 / goalMl).coerceIn(0, 100) else 0
         val remaining = (goalMl - currentMl).coerceAtLeast(0)
 
@@ -33,17 +35,40 @@ class AquaWidget : GlanceAppWidget() {
                               pct = pct, remaining = remaining)
         }
     }
+
+    companion object {
+        /**
+         * Flutter SharedPreferences.setInt() сохраняет значение как Int под ключом "flutter.<key>".
+         * Fallback на getFloat — на случай если ранее было сохранено как Float.
+         */
+        fun readInt(prefs: SharedPreferences, key: String, default: Int): Int {
+            val fullKey = "flutter.$key"
+            // Пробуем Int (основной формат после нашего фикса)
+            if (prefs.contains(fullKey)) {
+                return try {
+                    prefs.getInt(fullKey, default)
+                } catch (_: ClassCastException) {
+                    // Fallback: сохранено как Float (старый формат)
+                    try {
+                        prefs.getFloat(fullKey, default.toFloat()).toInt()
+                    } catch (_: ClassCastException) {
+                        // Fallback: сохранено как String (home_widget default)
+                        prefs.getString(fullKey, null)?.toDoubleOrNull()?.toInt() ?: default
+                    }
+                }
+            }
+            return default
+        }
+    }
 }
 
 @Composable
 fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
-    // Размер текущего виджета — используем для пропорционального заполнения
     val size        = LocalSize.current
-    val totalHeight = size.height.value          // dp
+    val totalHeight = size.height.value
     val fillHeight  = (totalHeight * pct / 100f).dp.coerceAtLeast(0.dp)
     val emptyHeight = (totalHeight - fillHeight.value).dp.coerceAtLeast(0.dp)
 
-    // Цвета
     val bgDark     = ColorProvider(Color(0xFF05080F))
     val waterDeep  = ColorProvider(when {
         pct >= 80 -> Color(0xFF1565C0)
@@ -68,32 +93,20 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
             .clickable(actionStartActivity<MainActivity>()),
         contentAlignment = Alignment.Center,
     ) {
-        // ── Слой воды: пустое пространство сверху + вода снизу ─────────
         Column(modifier = GlanceModifier.fillMaxSize()) {
-            // Пустое место сверху
             Box(modifier = GlanceModifier.fillMaxWidth().height(emptyHeight)) {}
-
-            // «Гребень волны» — тонкая светлая полоска на поверхности воды
             if (pct in 2..99) {
-                Box(
-                    modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(waterCrest)
-                ) {}
+                Box(modifier = GlanceModifier.fillMaxWidth().height(3.dp).background(waterCrest)) {}
             }
-
-            // Основная масса воды
             Box(
                 modifier = GlanceModifier
                     .fillMaxWidth()
-                    .fillMaxHeight()    // занимает весь оставшийся низ
+                    .fillMaxHeight()
                     .background(waterDeep)
                     .cornerRadius(20.dp),
             ) {}
         }
 
-        // ── Текст и кнопка поверх воды ──────────────────────────────────
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
@@ -103,11 +116,7 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
         ) {
             Text(
                 text  = "$pct%",
-                style = TextStyle(
-                    color      = white,
-                    fontSize   = 38.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
+                style = TextStyle(color = white, fontSize = 38.sp, fontWeight = FontWeight.Bold),
             )
             Spacer(modifier = GlanceModifier.height(2.dp))
             Text(
@@ -130,11 +139,7 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
             ) {
                 Text(
                     text  = "+250 мл",
-                    style = TextStyle(
-                        color      = white,
-                        fontSize   = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                    ),
+                    style = TextStyle(color = white, fontSize = 12.sp, fontWeight = FontWeight.Medium),
                 )
             }
         }

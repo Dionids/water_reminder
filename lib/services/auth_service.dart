@@ -27,9 +27,11 @@ class AuthResult {
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// FIX: На Android используем clientId, не serverClientId
+  /// serverClientId (Web Client ID, type 3 из google-services.json) — нужен для
+  /// получения idToken на Android. Без него googleAuth.idToken = null и
+  /// Firebase credential не работает.
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: _webClientId,
+    serverClientId: _webClientId,
     scopes: ['email', 'profile'],
   );
 
@@ -125,6 +127,11 @@ class AuthService {
       }
 
       final googleAuth = await googleUser.authentication;
+      // idToken требуется для Firebase. Если null — Google Sign-In настроен неверно.
+      if (googleAuth.idToken == null) {
+        debugPrint('Auth Google: idToken is null — проверь serverClientId в google-services.json');
+        return const AuthResult.failure('Не удалось получить данные Google аккаунта');
+      }
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken:     googleAuth.idToken,
