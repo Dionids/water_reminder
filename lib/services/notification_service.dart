@@ -120,6 +120,8 @@ class NotificationService {
           tzScheduled,
           NotificationDetails(android: androidDetails),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
         );
 
         // Отправляем расписание на часы
