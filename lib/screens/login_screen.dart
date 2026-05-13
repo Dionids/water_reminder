@@ -37,7 +37,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     if (result.success) {
       final profile = result.profile!;
-      // Если профиль уже заполнен (вес есть) — на главную, иначе онбординг
       final route = profile.weight != null ? '/home' : '/onboarding';
       Navigator.of(context).pushReplacementNamed(route);
     } else {
@@ -47,6 +46,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Во время загрузки — просто центрированный спиннер
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF0F4F8),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4F8),
       body: SafeArea(
@@ -118,47 +125,43 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
               ],
 
-              if (_isLoading)
-                const CircularProgressIndicator()
-              else ...[
-                // Google Sign-In
-                _GoogleButton(onTap: _signInWithGoogle),
-                const SizedBox(height: 12),
+              // Google Sign-In
+              _GoogleButton(onTap: _signInWithGoogle),
+              const SizedBox(height: 12),
 
-                // Разделитель
-                Row(children: [
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('или',
-                        style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                  ),
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
-                ]),
-                const SizedBox(height: 12),
+              // Разделитель
+              Row(children: [
+                Expanded(child: Divider(color: Colors.grey.shade300)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('или',
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                ),
+                Expanded(child: Divider(color: Colors.grey.shade300)),
+              ]),
+              const SizedBox(height: 12),
 
-                // Анонимный вход
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton.icon(
-                    onPressed: _signInAnonymously,
-                    icon: const Icon(Icons.person_outline_rounded),
-                    label: const Text('Продолжить без аккаунта'),
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      side: BorderSide(color: Colors.grey.shade300),
-                    ),
+              // Анонимный вход
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: _signInAnonymously,
+                  icon: const Icon(Icons.person_outline_rounded),
+                  label: const Text('Продолжить без аккаунта'),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    side: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Без аккаунта история не сохраняется\nпри смене устройства',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                ),
-              ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Без аккаунта история не сохраняется\nпри смене устройства',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
 
               const Spacer(),
             ],
@@ -189,22 +192,17 @@ class _GoogleButton extends StatelessWidget {
             side: BorderSide(color: Colors.grey.shade300),
           ),
         ),
-        child: Row(
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Google G иконка через SVG-like контейнер
-            Container(
-              width: 20, height: 20,
-              decoration: const BoxDecoration(shape: BoxShape.circle),
-              child: const Text('G',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: Color(0xFF4285F4),
-                )),
-            ),
-            const SizedBox(width: 10),
-            const Text('Войти через Google',
+            Text('G',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: Color(0xFF4285F4),
+              )),
+            SizedBox(width: 10),
+            Text('Войти через Google',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
           ],
         ),

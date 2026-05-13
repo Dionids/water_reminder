@@ -12,6 +12,8 @@ import 'services/health_service.dart';
 import 'services/notification_service.dart';
 import 'services/api_service.dart';
 import 'services/sync_service.dart';
+import 'services/wear_sync_service.dart';
+import 'services/home_widget_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/history_screen.dart';
@@ -121,7 +123,10 @@ class MyApp extends StatelessWidget {
               healthService: healthService,
               notificationService: notificationService,
             ),
-        '/onboarding': (context) => OnboardingScreen(hiveService: hiveService),
+        '/onboarding': (context) => OnboardingScreen(
+              hiveService: hiveService,
+              healthService: healthService,
+            ),
         '/history': (context) => HistoryScreen(hiveService: hiveService),
         '/profile': (context) => ProfileScreen(
               hiveService: hiveService,
@@ -181,6 +186,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
   double _animatedProgress = 0;
+  // ignore: cancel_subscriptions
+  StreamSubscription<int>? _wearSubscription;
 
   @override
   void initState() {
@@ -205,10 +212,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _uiRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+
+    // Слушаем нажатие + с Wear OS часов
+    _wearSubscription = WearSyncService().watchAddWaterStream.listen((addedMl) {
+      _addWater(addedMl.toDouble());
+    });
   }
 
   @override
   void dispose() {
+    _wearSubscription?.cancel();
     _autoSyncTimer?.cancel();
     _uiRefreshTimer?.cancel();
     _progressController.dispose();
@@ -222,8 +235,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _todayWater = total;
       if (profile?.dailyBaseGoal != null) _dailyGoal = profile!.dailyBaseGoal!;
       _lastSyncTime = profile?.lastSync;
+      // Показываем вес из профиля пока Health Connect не вернёт данные
+      if (_weight == 0.0 && (profile?.weight ?? 0) > 0) {
+        _weight = profile!.weight!;
+      }
     });
     _animateProgress(total / _dailyGoal);
+
+    // Синхронизируем виджет на домашнем экране при каждой загрузке данных
+    await HomeWidgetService().update(
+      currentMl: total,
+      goalMl: _dailyGoal.toDouble(),
+    );
   }
 
   void _animateProgress(double target) {
@@ -241,6 +264,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final log = await widget.hiveService.addWaterLog(amount);
     await _loadData();
     await widget.notificationService.showHydrationReminder(dailyGoal: _dailyGoal);
+
+    // Синхронизируем на часы
+    await WearSyncService().pushToWatch(
+      currentMl: _todayWater.toInt(),
+      goalMl: _dailyGoal.toInt(),
+    );
+
+    // Обновляем виджет на домашнем экране
+    await HomeWidgetService().update(
+      currentMl: _todayWater,
+      goalMl: _dailyGoal.toDouble(),
+    );
 
     // Пробуем сразу отправить на сервер
     final profile = widget.hiveService.getProfile();
@@ -320,9 +355,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final workoutIntensity = data['workoutIntensity'] as WorkoutIntensity;
       final activityNames   = data['activityNames']    as List<String>;
 
+      final profile2 = widget.hiveService.getProfile();
       setState(() {
-        _steps = steps; _weight = weight; _calories = calories;
-        _distance = distance; _heartRate = heartRate;
+        _steps = steps;
+        // Если Health Connect не вернул вес — используем сохранённый в профиле
+        _weight = weight > 0 ? weight : (profile2?.weight ?? 0.0);
+        _calories = calories;
+        _distance = distance;
+        _heartRate = heartRate;
         _workoutMinutes = workoutMinutes;
         _workoutIntensity = workoutIntensity;
         _activityNames = activityNames;
@@ -367,6 +407,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           _flushWaterLogs(profile!.firebaseUid!);
         }
 
+        // Планируем уведомления на основе данных сна
+        _scheduleWaterReminders(newGoal);
+
         if (!silent) _showSnackBar('Норма обновлена: $newGoal мл 💧');
       } else {
         // Офлайн — считаем локально, но время синхронизации всё равно обновляем
@@ -379,10 +422,27 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           profile.lastSync = DateTime.now();
           await widget.hiveService.saveProfile(profile);
         }
+        // Планируем уведомления и в офлайн-режиме
+        _scheduleWaterReminders(_dailyGoal);
         if (!silent) _showSnackBar('Синхронизировано (офлайн)');
       }
     } finally {
       if (mounted) setState(() => _isSyncing = false);
+    }
+  }
+
+  /// Читает данные сна из Health Connect и планирует уведомления о воде.
+  /// Вызывается после каждой синхронизации активности.
+  Future<void> _scheduleWaterReminders(int goalMl) async {
+    try {
+      final sleepWindow = await widget.healthService.fetchSleepWindow();
+      await widget.notificationService.scheduleDailyWaterReminders(
+        wakeTime: sleepWindow.wakeTime,
+        bedTime:  sleepWindow.bedTime,
+        goalMl:   goalMl,
+      );
+    } catch (e) {
+      debugPrint('_scheduleWaterReminders error: $e');
     }
   }
 
@@ -558,14 +618,16 @@ class _HeroWaterCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: fillColor.withOpacity(0.35),
+            color: fillColor.withValues(alpha: 0.35),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 340;
+        return Padding(
+        padding: EdgeInsets.all(isSmall ? 16 : 24),
         child: Column(
           children: [
             // Прогресс-бар волна
@@ -577,9 +639,9 @@ class _HeroWaterCard extends StatelessWidget {
                     children: [
                       Text(
                         '${todayWater.toInt()} мл',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 40,
+                          fontSize: isSmall ? 30 : 40,
                           fontWeight: FontWeight.w800,
                           height: 1,
                         ),
@@ -588,8 +650,8 @@ class _HeroWaterCard extends StatelessWidget {
                       Text(
                         'из $dailyGoal мл',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
-                          fontSize: 16,
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: isSmall ? 13 : 16,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -659,7 +721,8 @@ class _HeroWaterCard extends StatelessWidget {
             _SyncFooter(syncState: syncState),
           ],
         ),
-      ),
+        );
+      }),
     );
   }
 }
@@ -854,14 +917,18 @@ class _HealthStatsGrid extends StatelessWidget {
           child: Text('Health Connect',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         ),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.7,
-          children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final tileWidth = (constraints.maxWidth - 12) / 2;
+            final aspectRatio = (tileWidth / 80).clamp(1.5, 2.2);
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: aspectRatio,
+              children: [
             _StatTile(icon: Icons.directions_walk_rounded, label: 'Шаги', value: '$steps', color: const Color(0xFF43A047)),
             _StatTile(icon: Icons.monitor_weight_rounded, label: 'Вес',
                 value: weight > 0 ? '${weight.toStringAsFixed(1)} кг' : '—', color: const Color(0xFF8E24AA)),
@@ -874,6 +941,8 @@ class _HealthStatsGrid extends StatelessWidget {
             _StatTile(icon: Icons.fitness_center_rounded, label: 'Тренировка',
                 value: workoutValue, color: const Color(0xFFFF6F00)),
           ],
+            );
+          },
         ),
       ],
     );
@@ -895,22 +964,25 @@ class _StatTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
       ),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: color, size: 18),
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(7)),
+            child: Icon(icon, color: color, size: 16),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              const SizedBox(height: 1),
-              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              Text(label,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  overflow: TextOverflow.ellipsis),
+              Text(value,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                   maxLines: 2, overflow: TextOverflow.ellipsis),
             ],
           ),
@@ -999,24 +1071,26 @@ class _SyncFooter extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: Colors.white, size: 14),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.white.withOpacity(0.9),
+                    size: 14,
+                  ),
                   const SizedBox(width: 6),
-                  Text(
-                    'Данные устарели · ${syncState.label}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500),
+                  const Text(
+                    'Данные устарели',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ],
               ),
             )
           : Text(
+              syncState.label,
               key: const ValueKey('fresh'),
-              '🔄 ${syncState.label}',
               style: TextStyle(
-                  color: Colors.white.withOpacity(0.65), fontSize: 12),
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 12,
+              ),
             ),
     );
   }

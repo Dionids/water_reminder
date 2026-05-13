@@ -58,6 +58,45 @@
                 android:value="androidx.startup" />
         </provider>
 
+
+        <!-- Слушатель данных от Wear OS часов -->
+        <service
+            android:name=".WearDataListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/aquatrack"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
+
+        <!-- Виджет на домашний экран -->
+        <receiver
+            android:name=".widget.AquaWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aqua_widget_info" />
+        </receiver>
+
+        <!-- Quick Settings Tile в шторке -->
+        <service
+            android:name=".AquaQuickTile"
+            android:exported="true"
+            android:label="Вода"
+            android:icon="@mipmap/ic_launcher"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
     </application>
 
     <queries>
@@ -80,4 +119,9 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Точные будильники для уведомлений о воде -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Перезапуск будильников после перезагрузки -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>
