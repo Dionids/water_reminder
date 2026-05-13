@@ -22,16 +22,13 @@ class WaterReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val glassIndex   = intent.getIntExtra(DataListenerService.EXTRA_GLASS_INDEX, 1)
         val totalGlasses = intent.getIntExtra(DataListenerService.EXTRA_TOTAL_GLASSES, 1)
-        val remaining    = totalGlasses - glassIndex + 1
+        val remaining    = (totalGlasses - glassIndex).coerceAtLeast(0)
 
         Log.d(TAG, "Water reminder fired: glass $glassIndex / $totalGlasses")
 
-        // Открыть MainActivity при нажатии на уведомление
         val openIntent = Intent(context, MainActivity::class.java)
         val pendingOpen = PendingIntent.getActivity(
-            context,
-            glassIndex,
-            openIntent,
+            context, glassIndex, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -42,14 +39,13 @@ class WaterReminderReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingOpen)
             .setAutoCancel(true)
-            // Тактильная обратная связь на часах
             .setVibrate(longArrayOf(0, 200, 100, 200))
             .build()
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(glassIndex, notification)
 
-        // Обновить Tile — возможно процент изменился
+        // Обновляем Tile — пользователь выпил стакан
         AquaTileService.requestUpdate(context)
     }
 }

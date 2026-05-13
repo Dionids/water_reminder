@@ -32,9 +32,16 @@ class NotificationService {
       iOS: iosSettings,
     );
     await _notifications.initialize(settings);
+
+    // Запрашиваем разрешение на показ уведомлений (Android 13+)
+    await _notifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
   }
 
-  // Умное разовое напоминание
+  // ── Умное разовое напоминание ──────────────────────────────────────
+
   Future<void> showHydrationReminder({required int dailyGoal}) async {
     try {
       final currentWater = await hiveService.getTotalWaterToday();
@@ -45,99 +52,94 @@ class NotificationService {
       const AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
         'hydration_id',
-        'Hydration Reminders',
-        channelDescription: 'Reminds you to drink water based on your activity',
+        'Напоминания о воде',
+        channelDescription: 'Напоминает выпить воду на основе активности',
         importance: Importance.high,
         priority: Priority.high,
       );
       await _notifications.show(
         0,
-        'Время выпить воду!',
+        '💧 Время выпить воду!',
         'Выпито ${((currentWater / dailyGoal) * 100).toInt()}% нормы.',
         const NotificationDetails(android: androidDetails),
       );
     } catch (e) {
-      debugPrint('Notification Service Error: $e');
+      debugPrint('NotificationService.showHydrationReminder error: $e');
     }
   }
 
-  // Планировщик по расписанию сна
+  // ── Планировщик по расписанию сна ─────────────────────────────────
+
+  /// Отменяет старые напоминания и планирует новые.
+  /// Стаканы равномерно распределяются между [wakeTime] и [bedTime].
+  /// Каждое напоминание также отправляется на часы через [WearSyncService].
   Future<void> scheduleDailyWaterReminders({
     required DateTime wakeTime,
     required DateTime bedTime,
     required int goalMl,
   }) async {
-    for (var i = _reminderIdBase; i < _reminderIdBase + _maxReminders; i++) {
-      await _notifications.cancel(i);
-    }
-
-    final now = DateTime.now();
-    if (bedTime.isBefore(now)) {
-      debugPrint('Reminders: окно бодрствования прошло.');
-      return;
-    }
-
-    final startTime =
-        wakeTime.isBefore(now) ? now.add(const Duration(minutes: 2)) : wakeTime;
-    final wakeDuration = bedTime.difference(startTime);
-    if (wakeDuration.inMinutes < 30) return;
-
-    final glasses         = (goalMl / _glassMl).ceil();
-    final intervalMinutes = wakeDuration.inMinutes / glasses;
-    int scheduled         = 0;
-
-    debugPrint('Reminders: $glasses стаканов, интервал ${intervalMinutes.round()} мин');
-
-    for (var i = 0; i < glasses && scheduled < _maxReminders; i++) {
-      final reminderTime =
-          startTime.add(Duration(minutes: (intervalMinutes * i).round()));
-      if (reminderTime.isBefore(now) || reminderTime.isAfter(bedTime)) continue;
-
-      final remaining = glasses - i;
-      final timeStr =
-          '${reminderTime.hour}:${reminderTime.minute.toString().padLeft(2, "0")}';
-
-      try {
-        await _notifications.zonedSchedule(
-          _reminderIdBase + scheduled,
-          'Выпей стакан воды',
-          'Стакан ${i + 1} из $glasses, осталось $remaining ($timeStr)',
-          tz.TZDateTime.from(reminderTime, tz.local),
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              'water_schedule',
-              'График воды по сну',
-              channelDescription: 'Напоминания по времени бодрствования',
-              importance: Importance.high,
-              priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
-              additionalFlags: Int32List.fromList([0x00000020]),
-            ),
-          ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-        );
-
-        WearSyncService().sendReminderToWatch(
-          scheduledAt:  reminderTime.millisecondsSinceEpoch,
-          glassIndex:   i + 1,
-          totalGlasses: glasses,
-        );
-
-        debugPrint('  -> #${_reminderIdBase + scheduled} в $timeStr');
-        scheduled++;
-      } catch (e) {
-        debugPrint('  -> ошибка #$i: $e');
+    try {
+      // Отменяем старые напоминания
+      for (var i = _reminderIdBase; i < _reminderIdBase + _maxReminders; i++) {
+        await _notifications.cancel(i);
       }
-    }
-    debugPrint('Reminders: запланировано $scheduled уведомлений.');
-  }
 
-  Future<void> requestPermissions() async {
-    await _notifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+      final glasses = (goalMl / _glassMl).ceil().clamp(1, _maxReminders);
+      final wakingMinutes = bedTime.difference(wakeTime).inMinutes;
+      if (wakingMinutes <= 0) {
+        debugPrint('scheduleDailyWaterReminders: invalid sleep window, skip');
+        return;
+      }
+
+      final intervalMinutes = (wakingMinutes / glasses).round();
+      final now = DateTime.now();
+
+      for (var i = 0; i < glasses; i++) {
+        final scheduledTime =
+            wakeTime.add(Duration(minutes: intervalMinutes * i));
+
+        // Не планируем напоминания в прошлом
+        if (scheduledTime.isBefore(now)) continue;
+
+        final tzScheduled = tz.TZDateTime.from(scheduledTime, tz.local);
+
+        final androidDetails = AndroidNotificationDetails(
+          'water_reminders',
+          'Напоминания по расписанию',
+          channelDescription: 'Напоминает выпить стакан воды по расписанию сна',
+          importance: Importance.high,
+          priority: Priority.high,
+          // FLAG_ONLY_ALERT_ONCE — перекидывает уведомление на часы
+          additionalFlags: Int32List.fromList([0x00000020]),
+        );
+
+        await _notifications.zonedSchedule(
+          _reminderIdBase + i,
+          '💧 Выпей стакан воды',
+          'Стакан ${i + 1} из $glasses · осталось ${glasses - i - 1}',
+          tzScheduled,
+          NotificationDetails(android: androidDetails),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+
+        // Отправляем расписание на часы
+        try {
+          await WearSyncService().sendReminderToWatch(
+            scheduledAt: scheduledTime.millisecondsSinceEpoch,
+            glassIndex:  i + 1,
+            totalGlasses: glasses,
+          );
+        } catch (e) {
+          debugPrint('sendReminderToWatch[$i] error: $e');
+        }
+      }
+
+      debugPrint(
+          'scheduleDailyWaterReminders: $glasses стаканов запланировано '
+          '(${wakeTime.hour}:${wakeTime.minute.toString().padLeft(2, '0')} – '
+          '${bedTime.hour}:${bedTime.minute.toString().padLeft(2, '0')})');
+    } catch (e) {
+      debugPrint('scheduleDailyWaterReminders error: $e');
+    }
   }
 }

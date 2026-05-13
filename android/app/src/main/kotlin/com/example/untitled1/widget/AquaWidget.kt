@@ -3,6 +3,7 @@ package com.example.untitled1.widget
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.*
@@ -28,35 +29,36 @@ class AquaWidget : GlanceAppWidget() {
         val remaining = (goalMl - currentMl).coerceAtLeast(0)
 
         provideContent {
-            AquaWidgetContent(
-                currentMl = currentMl,
-                goalMl    = goalMl,
-                pct       = pct,
-                remaining = remaining,
-            )
+            AquaWidgetContent(currentMl = currentMl, goalMl = goalMl,
+                              pct = pct, remaining = remaining)
         }
     }
 }
 
 @Composable
 fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
-    val bgDark    = ColorProvider(Color(0xFF05080F))
-    val waterFill = ColorProvider(
-        when {
-            pct >= 80 -> Color(0xFF1256A8)
-            pct >= 50 -> Color(0xFF0D4080)
-            else      -> Color(0xFF071F45)
-        }
-    )
-    val white  = ColorProvider(Color.White)
-    val sub    = ColorProvider(Color(0xFF8AC4E8))
-    val accent = ColorProvider(Color(0xFF5AB4F0))
-    val btnBg  = ColorProvider(Color(0xFF0A2040))
+    // Размер текущего виджета — используем для пропорционального заполнения
+    val size        = LocalSize.current
+    val totalHeight = size.height.value          // dp
+    val fillHeight  = (totalHeight * pct / 100f).dp.coerceAtLeast(0.dp)
+    val emptyHeight = (totalHeight - fillHeight.value).dp.coerceAtLeast(0.dp)
 
-    // Имитируем заполнение водой через Column с defaultWeight:
-    // верхний spacer занимает (100 - pct) частей, нижний fill — pct частей
-    val topWeight  = (100 - pct).toFloat().coerceAtLeast(0.1f)
-    val fillWeight = pct.toFloat().coerceAtLeast(0.1f)
+    // Цвета
+    val bgDark     = ColorProvider(Color(0xFF05080F))
+    val waterDeep  = ColorProvider(when {
+        pct >= 80 -> Color(0xFF1565C0)
+        pct >= 50 -> Color(0xFF0D4080)
+        else      -> Color(0xFF071F45)
+    })
+    val waterCrest = ColorProvider(when {
+        pct >= 80 -> Color(0xFF1E88E5)
+        pct >= 50 -> Color(0xFF1256A8)
+        else      -> Color(0xFF0D3060)
+    })
+    val white      = ColorProvider(Color.White)
+    val subColor   = ColorProvider(Color(0xFF8AC4E8))
+    val accentColor= ColorProvider(Color(0xFF5AB4F0))
+    val btnBg      = ColorProvider(Color(0x880A2040))
 
     Box(
         modifier = GlanceModifier
@@ -66,25 +68,32 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
             .clickable(actionStartActivity<MainActivity>()),
         contentAlignment = Alignment.Center,
     ) {
-        // Слой заполнения воды (снизу вверх)
+        // ── Слой воды: пустое пространство сверху + вода снизу ─────────
         Column(modifier = GlanceModifier.fillMaxSize()) {
-            // Пустое пространство сверху
+            // Пустое место сверху
+            Box(modifier = GlanceModifier.fillMaxWidth().height(emptyHeight)) {}
+
+            // «Гребень волны» — тонкая светлая полоска на поверхности воды
+            if (pct in 2..99) {
+                Box(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(waterCrest)
+                ) {}
+            }
+
+            // Основная масса воды
             Box(
                 modifier = GlanceModifier
                     .fillMaxWidth()
-                    .defaultWeight(topWeight),
-            ) {}
-            // Синий блок воды снизу
-            Box(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .defaultWeight(fillWeight)
-                    .background(waterFill)
+                    .fillMaxHeight()    // занимает весь оставшийся низ
+                    .background(waterDeep)
                     .cornerRadius(20.dp),
             ) {}
         }
 
-        // Контент поверх заполнения
+        // ── Текст и кнопка поверх воды ──────────────────────────────────
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
@@ -92,33 +101,25 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment   = Alignment.CenterVertically,
         ) {
-            // Большой процент
             Text(
                 text  = "$pct%",
                 style = TextStyle(
                     color      = white,
-                    fontSize   = 36.sp,
+                    fontSize   = 38.sp,
                     fontWeight = FontWeight.Bold,
                 ),
             )
             Spacer(modifier = GlanceModifier.height(2.dp))
-
-            // Выпито / норма
             Text(
                 text  = "$currentMl / $goalMl мл",
-                style = TextStyle(color = sub, fontSize = 11.sp),
+                style = TextStyle(color = subColor, fontSize = 11.sp),
             )
             Spacer(modifier = GlanceModifier.height(2.dp))
-
-            // Осталось
-            val remainText = if (remaining == 0) "выполнено!" else "ещё $remaining мл"
             Text(
-                text  = remainText,
-                style = TextStyle(color = accent, fontSize = 11.sp),
+                text  = if (remaining == 0) "выполнено! 🎉" else "ещё $remaining мл",
+                style = TextStyle(color = accentColor, fontSize = 11.sp),
             )
             Spacer(modifier = GlanceModifier.height(10.dp))
-
-            // Кнопка
             Box(
                 modifier = GlanceModifier
                     .background(btnBg)
@@ -130,7 +131,7 @@ fun AquaWidgetContent(currentMl: Int, goalMl: Int, pct: Int, remaining: Int) {
                 Text(
                     text  = "+250 мл",
                     style = TextStyle(
-                        color      = accent,
+                        color      = accentColor,
                         fontSize   = 12.sp,
                         fontWeight = FontWeight.Medium,
                     ),

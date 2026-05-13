@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Wear OS Tile — компактная карточка, доступная свайпом влево от циферблата.
- * Показывает прогресс воды и кнопку +200 мл.
+ * Показывает прогресс воды и кнопку +250 мл.
  *
  * Для обновления тайла вызывай AquaTileService.requestUpdate(context).
  */
@@ -147,7 +147,7 @@ class AquaTileService : SuspendingTileService() {
                     .addContent(
                         // Кнопка +200 мл
                         Text.Builder()
-                            .setText("+ стакан")
+                            .setText("+250 мл")
                             .setFontStyle(
                                 FontStyle.Builder()
                                     .setSize(sp(13f))
