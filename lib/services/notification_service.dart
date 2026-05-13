@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -109,8 +108,8 @@ class NotificationService {
           channelDescription: 'Напоминает выпить стакан воды по расписанию сна',
           importance: Importance.high,
           priority: Priority.high,
-          // FLAG_ONLY_ALERT_ONCE — перекидывает уведомление на часы
-          additionalFlags: Int32List.fromList([0x00000020]),
+          // Позволяем Android автоматически бриджить уведомление на Wear OS
+          channelShowBadge: true,
         );
 
         await _notifications.zonedSchedule(

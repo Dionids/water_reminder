@@ -2,6 +2,7 @@ package com.example.untitled1.wear
 
 import android.content.Context
 import androidx.wear.protolayout.*
+import androidx.wear.protolayout.ActionBuilders
 import androidx.wear.protolayout.ColorBuilders.argb
 import androidx.wear.protolayout.DimensionBuilders.*
 import androidx.wear.protolayout.LayoutElementBuilders.*
@@ -17,9 +18,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Wear OS Tile — компактная карточка, доступная свайпом влево от циферблата.
- * Показывает прогресс воды и кнопку +250 мл.
- *
- * Для обновления тайла вызывай AquaTileService.requestUpdate(context).
+ * Кнопка +250 мл запускает MainActivity с action=add_water, который сразу добавляет стакан.
  */
 class AquaTileService : SuspendingTileService() {
 
@@ -60,13 +59,30 @@ class AquaTileService : SuspendingTileService() {
     private fun buildRoot(
         pct: Int, currentMl: Int, goalMl: Int, remainMl: Int
     ): LayoutElement {
-        val waterColor  = argb(0xFF3B8BD4.toInt())
-        val dimColor    = argb(0xFF1A2840.toInt())
-        val white       = argb(0xFFFFFFFF.toInt())
-        val subColor    = argb(0xFF8AC4E8.toInt())
-        val btnColor    = argb(0xFF0A2040.toInt())
-        val btnBorder   = argb(0xFF1E4A80.toInt())
-        val btnIconColor = argb(0xFF5AB4F0.toInt())
+        val waterColor   = argb(0xFF3B8BD4.toInt())
+        val dimColor     = argb(0xFF1A2840.toInt())
+        val white        = argb(0xFFFFFFFF.toInt())
+        val subColor     = argb(0xFF8AC4E8.toInt())
+        val btnColor     = argb(0xFF1565C0.toInt())
+        val btnTextColor = argb(0xFFFFFFFF.toInt())
+
+        // Кнопка +250 мл: открывает MainActivity с action=add_water
+        val addWaterClickable = Clickable.Builder()
+            .setOnClick(
+                ActionBuilders.LaunchAction.Builder()
+                    .setAndroidActivity(
+                        ActionBuilders.AndroidActivity.Builder()
+                            .setPackageName(packageName)
+                            .setClassName("$packageName.MainActivity")
+                            .addKeyToExtraMapping(
+                                "action",
+                                ActionBuilders.AndroidStringExtra.Builder()
+                                    .setValue(MainActivity.ACTION_ADD_WATER)
+                                    .build()
+                            )
+                            .build()
+                    ).build()
+            ).build()
 
         return Box.Builder()
             .setWidth(expand())
@@ -117,7 +133,7 @@ class AquaTileService : SuspendingTileService() {
                             )
                             .addContent(
                                 Box.Builder()
-                                    .setWidth(dp(150f * pct / 100f))
+                                    .setWidth(dp((150f * pct / 100f).coerceAtLeast(0f)))
                                     .setHeight(dp(6f))
                                     .setHorizontalAlignment(HORIZONTAL_ALIGN_START)
                                     .setModifiers(
@@ -135,7 +151,7 @@ class AquaTileService : SuspendingTileService() {
                     .addContent(
                         // Осталось
                         Text.Builder()
-                            .setText("осталось ${fmt(remainMl)} мл")
+                            .setText(if (remainMl == 0) "норма выполнена!" else "осталось ${fmt(remainMl)} мл")
                             .setFontStyle(
                                 FontStyle.Builder()
                                     .setSize(sp(11f))
@@ -145,13 +161,13 @@ class AquaTileService : SuspendingTileService() {
                     )
                     .addContent(spacer(10))
                     .addContent(
-                        // Кнопка +200 мл
+                        // Кнопка +250 мл — реально добавляет воду
                         Text.Builder()
                             .setText("+250 мл")
                             .setFontStyle(
                                 FontStyle.Builder()
                                     .setSize(sp(13f))
-                                    .setColor(btnIconColor)
+                                    .setColor(btnTextColor)
                                     .build()
                             )
                             .setModifiers(
@@ -168,18 +184,8 @@ class AquaTileService : SuspendingTileService() {
                                             .setStart(dp(20f)).setEnd(dp(20f))
                                             .build()
                                     )
-                                    .setClickable(
-                                        Clickable.Builder()
-                                            .setOnClick(
-                                                ActionBuilders.LaunchAction.Builder()
-                                                    .setAndroidActivity(
-                                                        ActionBuilders.AndroidActivity.Builder()
-                                                            .setPackageName(packageName)
-                                                            .setClassName("$packageName.MainActivity")
-                                                            .build()
-                                                    ).build()
-                                            ).build()
-                                    ).build()
+                                    .setClickable(addWaterClickable)
+                                    .build()
                             ).build()
                     ).build()
             ).build()
@@ -189,7 +195,7 @@ class AquaTileService : SuspendingTileService() {
 
     private fun fmt(ml: Int): String = if (ml >= 1000) {
         val thousands = ml / 1000
-        val hundreds = ml % 1000
+        val hundreds  = ml % 1000
         if (hundreds == 0) "${thousands}к" else "${thousands} ${hundreds}"
     } else ml.toString()
 }
