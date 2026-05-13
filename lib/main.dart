@@ -920,7 +920,7 @@ class _HealthStatsGrid extends StatelessWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             final tileWidth = (constraints.maxWidth - 12) / 2;
-            final aspectRatio = (tileWidth / 90).clamp(1.2, 2.0);
+            final aspectRatio = (tileWidth / 80).clamp(1.5, 2.2);
             return GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -964,22 +964,25 @@ class _StatTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
       ),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: color, size: 18),
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(7)),
+            child: Icon(icon, color: color, size: 16),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              const SizedBox(height: 1),
-              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              Text(label,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  overflow: TextOverflow.ellipsis),
+              Text(value,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                   maxLines: 2, overflow: TextOverflow.ellipsis),
             ],
           ),
