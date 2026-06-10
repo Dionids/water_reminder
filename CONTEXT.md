@@ -197,7 +197,7 @@ docker-compose up       # PostgreSQL + FastAPI
 ### URL в ApiService
 - Эмулятор: http://10.0.2.2:8000
 - Физическое устройство: IP компьютера в локальной сети
-- Прод: Railway URL (пока не задеплоен)
+- Прод: https://lovely-trust-production-ad76.up.railway.app ✅ задеплоен
 
 ---
 
@@ -234,7 +234,7 @@ docker-compose up       # PostgreSQL + FastAPI
 1. **applicationId = "com.example.untitled1"** — нужно переименовать перед релизом
 2. **activity_cache.dart** — мёртвый код, не используется, нужно удалить
 3. **baseUrl захардкожен** — нужен env-конфиг для прод URL бэкенда
-4. **Бэкенд не задеплоен** — работает только локально, нужен Railway
+4. **Бэкенд задеплоен** — https://lovely-trust-production-ad76.up.railway.app ✅
 5. **ProfileScreen** — не передаёт обновлённый вес на сервер при сохранении
 6. **Аналитика** — GET /analytics реализована на бэкенде, но не показывается в приложении
 7. **fl_chart** — подключён, используется только в HistoryScreen (7 дней). Можно добавить на главный экран
@@ -244,7 +244,7 @@ docker-compose up       # PostgreSQL + FastAPI
 ## Что ещё не сделано (приоритеты)
 
 **Высокий приоритет:**
-- Задеплоить бэкенд на Railway + настроить DATABASE_URL
+- ~~Задеплоить бэкенд на Railway~~ ✅ https://lovely-trust-production-ad76.up.railway.app
 - Заменить applicationId на com.dionids.aquatrack
 - Показать аналитику в приложении (экран статистики)
 
