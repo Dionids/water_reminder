@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.untitled1"
+    namespace = "com.dionids.aquatrack"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.untitled1"
+        applicationId = "com.dionids.aquatrack"
         minSdk = 28
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

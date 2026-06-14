@@ -25,7 +25,7 @@ class HomeWidgetService {
 
       // Триггер обновления виджета через home_widget
       await HomeWidget.updateWidget(
-        qualifiedAndroidName: 'com.example.untitled1.widget.$_androidName',
+        qualifiedAndroidName: 'com.dionids.aquatrack.widget.$_androidName',
       );
     } catch (e) {
       // Не критично если виджет не обновился

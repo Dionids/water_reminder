@@ -34,6 +34,29 @@ class HiveService {
     return log;
   }
 
+  /// Добавляет лог восстановленный с сервера. synced=true — не нужно повторно отправлять.
+  Future<WaterLog> addWaterLogFromServer({
+    required double amount,
+    required DateTime date,
+  }) async {
+    final box = Hive.box<WaterLog>(waterBoxName);
+    // Проверяем дубликаты по времени с точностью до минуты
+    final existingKey = box.keys.firstWhere(
+      (k) {
+        final log = box.get(k);
+        if (log == null) return false;
+        final diff = log.date.difference(date).inSeconds.abs();
+        return diff < 60 && (log.amount - amount).abs() < 1;
+      },
+      orElse: () => null,
+    );
+    if (existingKey != null) return box.get(existingKey)!;
+
+    final log = WaterLog(amount: amount, date: date, synced: true);
+    await box.add(log);
+    return log;
+  }
+
   /// Помечает лог как синхронизированный с сервером.
   Future<void> markLogSynced(WaterLog log) async {
     log.synced = true;

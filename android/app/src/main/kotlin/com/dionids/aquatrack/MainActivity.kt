@@ -1,4 +1,4 @@
-package com.example.untitled1
+package com.dionids.aquatrack
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine

@@ -1,4 +1,4 @@
-package com.example.untitled1
+package com.dionids.aquatrack
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -13,8 +13,8 @@ import io.flutter.plugin.common.MethodChannel
 
 object WearSyncChannel {
 
-    private const val METHOD_CHANNEL = "com.example.untitled1/wear_sync"
-    private const val EVENT_CHANNEL  = "com.example.untitled1/wear_events"
+    private const val METHOD_CHANNEL = "com.dionids.aquatrack/wear_sync"
+    private const val EVENT_CHANNEL  = "com.dionids.aquatrack/wear_events"
     private const val TAG = "WearSyncChannel"
 
     private var eventSink: EventChannel.EventSink? = null

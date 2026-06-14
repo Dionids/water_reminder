@@ -318,6 +318,50 @@ def get_analytics(firebase_uid: str, days: int = 7, db: Session = Depends(get_db
     }
 
 
+@app.get("/water-logs/{firebase_uid}", summary="Логи воды за дату (для восстановления на новом устройстве)")
+def get_water_logs(firebase_uid: str, date: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Возвращает логи воды для пользователя.
+    date — опциональный фильтр в формате YYYY-MM-DD (по умолчанию сегодня).
+    Используется при первом запуске на новом устройстве чтобы подтянуть историю.
+    """
+    user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Парсим дату фильтра
+    try:
+        filter_date = datetime.strptime(date, "%Y-%m-%d").date() if date else date.today()
+    except (ValueError, AttributeError):
+        filter_date = datetime.now().date()
+
+    start_dt = datetime(filter_date.year, filter_date.month, filter_date.day, 0, 0, 0)
+    end_dt   = datetime(filter_date.year, filter_date.month, filter_date.day, 23, 59, 59)
+
+    logs = (db.query(WaterLog)
+            .filter(
+                WaterLog.firebase_uid == firebase_uid,
+                WaterLog.logged_at >= start_dt,
+                WaterLog.logged_at <= end_dt,
+            )
+            .order_by(WaterLog.logged_at.asc())
+            .all())
+
+    return {
+        "firebase_uid": firebase_uid,
+        "date":         filter_date.strftime("%Y-%m-%d"),
+        "total_ml":     round(sum(l.amount_ml for l in logs)),
+        "logs": [
+            {
+                "id":        l.id,
+                "amount_ml": l.amount_ml,
+                "logged_at": l.logged_at.isoformat(),
+            }
+            for l in logs
+        ],
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -115,6 +115,13 @@ class ApiService {
     return _get('/analytics/$firebaseUid?days=$days');
   }
 
+  /// Логи воды за дату с сервера (для восстановления на новом устройстве).
+  /// [date] — в формате 'yyyy-MM-dd', по умолчанию сегодня.
+  Future<Map<String, dynamic>?> getWaterLogs(String firebaseUid, {String? date}) async {
+    final query = date != null ? '?date=$date' : '';
+    return _get('/water-logs/$firebaseUid$query');
+  }
+
   String _intensityToString(WorkoutIntensity intensity) {
     switch (intensity) {
       case WorkoutIntensity.none:    return 'none';

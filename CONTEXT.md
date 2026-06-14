@@ -181,6 +181,7 @@ READ_TOTAL_CALORIES_BURNED, READ_DISTANCE, READ_EXERCISE
 | POST | /sync-activity | Синхронизация активности + расчёт нормы |
 | POST | /water-log | Сохранить запись о воде |
 | GET | /analytics/{uid}?days=7 | Статистика за N дней |
+| GET | /water-logs/{uid}?date=YYYY-MM-DD | Логи воды за дату (восстановление на новом устройстве) |
 
 ### Таблицы PostgreSQL
 - users: firebase_uid (PK), device_id, display_name, email, is_anonymous, weight_kg, age
@@ -207,7 +208,7 @@ docker-compose up       # PostgreSQL + FastAPI
 
 - Project ID: aquatrack-7dbfb
 - Project Number: 624904190292
-- Package: com.example.untitled1 (нужно переименовать!)
+- Package: com.dionids.aquatrack
 - SHA-1: 42:54:B0:65:DA:6E:7E:ED:EC:F1:A2:0A:10:06:66:EE:4C:8E:EE:01
 - google-services.json: android/app/google-services.json
 - firebase_options.dart: lib/firebase_options.dart
@@ -233,7 +234,7 @@ docker-compose up       # PostgreSQL + FastAPI
 
 ## Известные проблемы и технический долг
 
-1. **applicationId = "com.example.untitled1"** — нужно переименовать перед релизом (→ com.dionids.aquatrack)
+1. **~~applicationId~~** — ✅ переименован в com.dionids.aquatrack (build.gradle.kts, Kotlin пакеты, google-services.json, home_widget_service.dart)
 2. **activity_cache.dart** — мёртвый код, не используется, нужно удалить
 3. **baseUrl захардкожен** — нужен env-конфиг для прод URL бэкенда
 4. **Бэкенд задеплоен** — https://lovely-trust-production-ad76.up.railway.app ✅
@@ -241,7 +242,7 @@ docker-compose up       # PostgreSQL + FastAPI
 6. **~~Аналитика~~** — ✅ карточки avg_completion / avg_steps / best_day добавлены в HistoryScreen
 7. **~~wear_sync_service.dart отсутствовал~~** — ✅ добавлен stub, проект компилируется
 8. **~~home_widget не в pubspec~~** — ✅ добавлен home_widget: ^0.7.0
-9. **qualifiedAndroidName** в home_widget_service.dart — обновить при переименовании applicationId
+9. **~~qualifiedAndroidName~~** — ✅ обновлён в home_widget_service.dart
 
 ---
 
@@ -251,7 +252,8 @@ docker-compose up       # PostgreSQL + FastAPI
 - ~~Задеплоить бэкенд на Railway~~ ✅ https://lovely-trust-production-ad76.up.railway.app
 - ~~ProfileScreen — вес не отправлялся на сервер~~ ✅ исправлено
 - ~~Показать аналитику в приложении~~ ✅ добавлено в HistoryScreen
-- Заменить applicationId на com.dionids.aquatrack
+- ~~Заменить applicationId на com.dionids.aquatrack~~ ✅
+- ~~Восстановление логов воды на новом устройстве~~ ✅ GET /water-logs + restore при старте
 
 **Средний приоритет:**
 - Телеграм-бот с /stats командой (читает из PostgreSQL через FastAPI)

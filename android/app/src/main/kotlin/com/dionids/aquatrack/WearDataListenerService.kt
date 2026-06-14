@@ -1,4 +1,4 @@
-package com.example.untitled1
+package com.dionids.aquatrack
 
 import android.content.Intent
 import android.util.Log
@@ -18,7 +18,7 @@ import com.google.android.gms.wearable.WearableListenerService
 class WearDataListenerService : WearableListenerService() {
 
     companion object {
-        const val ACTION_WATER_FROM_WEAR = "com.example.untitled1.WATER_FROM_WEAR"
+        const val ACTION_WATER_FROM_WEAR = "com.dionids.aquatrack.WATER_FROM_WEAR"
         const val EXTRA_CURRENT_ML = "current_ml"
         const val EXTRA_GOAL_ML    = "goal_ml"
         const val EXTRA_ADDED_ML   = "added_ml"

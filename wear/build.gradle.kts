@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.untitled1.wear"
+    namespace = "com.dionids.aquatrack.wear"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.untitled1.wear"
+        applicationId = "com.dionids.aquatrack.wear"
         minSdk = 30
         targetSdk = 35
         versionCode = 1

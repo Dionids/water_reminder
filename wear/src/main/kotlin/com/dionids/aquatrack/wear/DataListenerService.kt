@@ -1,4 +1,4 @@
-package com.example.untitled1.wear
+package com.dionids.aquatrack.wear
 
 import android.app.AlarmManager
 import android.app.NotificationChannel

@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:624904190292:android:a144397f5cf0cf5f6a30c1",
         "android_client_info": {
-          "package_name": "com.example.untitled1"
+          "package_name": "com.dionids.aquatrack"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "624904190292-vv2m431k87a77e6dk0letttuq93q2vvn.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.example.untitled1",
+            "package_name": "com.dionids.aquatrack",
             "certificate_hash": "4254b065da6e7eedecf1a20a100666ee4c8eee01"
           }
         },

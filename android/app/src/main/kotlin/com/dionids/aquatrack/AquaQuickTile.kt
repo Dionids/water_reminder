@@ -1,11 +1,11 @@
-package com.example.untitled1
+package com.dionids.aquatrack
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import com.example.untitled1.widget.AquaWidgetReceiver
+import com.dionids.aquatrack.widget.AquaWidgetReceiver
 
 class AquaQuickTile : TileService() {
 

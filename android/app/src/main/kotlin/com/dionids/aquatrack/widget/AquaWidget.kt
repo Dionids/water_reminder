@@ -1,4 +1,4 @@
-package com.example.untitled1.widget
+package com.dionids.aquatrack.widget
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -17,7 +17,7 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.*
 import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
-import com.example.untitled1.MainActivity
+import com.dionids.aquatrack.MainActivity
 
 class AquaWidget : GlanceAppWidget() {
 

@@ -53,6 +53,36 @@ void main() async {
   // Восстанавливаем Firebase сессию
   final existingProfile = await authService.initializeAuth();
 
+  // Если Hive пустой (новое устройство), но пользователь уже авторизован —
+  // подтягиваем логи воды за сегодня с сервера
+  if (existingProfile?.firebaseUid != null) {
+    final todayTotal = await hiveService.getTotalWaterToday();
+    if (todayTotal == 0) {
+      try {
+        final apiService = ApiService();
+        final today = DateTime.now();
+        final dateStr =
+            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+        final serverLogs = await apiService.getWaterLogs(
+          existingProfile!.firebaseUid!,
+          date: dateStr,
+        );
+        final logs = serverLogs?['logs'] as List<dynamic>?;
+        if (logs != null && logs.isNotEmpty) {
+          for (final entry in logs) {
+            final amountMl = (entry['amount_ml'] as num).toDouble();
+            final loggedAt = DateTime.parse(entry['logged_at'] as String);
+            // Сохраняем локально как уже синхронизированный лог
+            await hiveService.addWaterLogFromServer(amount: amountMl, date: loggedAt);
+          }
+          debugPrint('Восстановлено ${logs.length} логов воды с сервера');
+        }
+      } catch (e) {
+        debugPrint('Не удалось восстановить логи воды: $e');
+      }
+    }
+  }
+
   runApp(MyApp(
     hiveService: hiveService,
     authService: authService,
