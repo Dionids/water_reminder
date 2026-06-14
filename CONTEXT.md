@@ -64,6 +64,9 @@ android/
     src/main/AndroidManifest.xml
     src/main/res/xml/health_permissions.xml
 
+tests/
+  test_water_goal_formula.py  — 27 Python unit-тестов формулы (pytest)
+
 telegram_bot/
   bot.py               — Telegram-бот (/start /link /today /stats /help)
   requirements.txt
@@ -262,7 +265,10 @@ docker-compose up       # PostgreSQL + FastAPI
 - ~~Восстановление логов воды на новом устройстве~~ ✅ GET /water-logs + restore при старте
 
 **Средний приоритет:**
-- ~~Телеграм-бот с /stats командой~~ ✅ telegram_bot/bot.py + README
+- ~~Телеграм-бот с /stats командой~~ ✅ tests/
+  test_water_goal_formula.py  — 27 Python unit-тестов формулы (pytest)
+
+telegram_bot/bot.py + README
 - ~~AI-советы через Claude API~~ ✅ generate_advice() → claude-haiku, фоллбэк если нет ключа
 - Реализовать Wear OS интеграцию (сейчас stub)
 
