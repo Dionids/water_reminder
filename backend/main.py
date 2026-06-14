@@ -141,7 +141,60 @@ def calculate_water_goal(weight_kg: float, steps: int,
         "total":      total,
     }
 
-def generate_advice(steps: int, intensity: str, minutes: int) -> str:
+def generate_advice(
+    steps: int,
+    intensity: str,
+    minutes: int,
+    weight_kg: float = 70.0,
+    calories: float = 0.0,
+    distance_m: float = 0.0,
+    daily_goal_ml: int = 2000,
+    activity_names: list = None,
+) -> str:
+    """
+    Генерирует персонализированный совет через Claude API.
+    При недоступности API или отсутствии ключа — фоллбэк на статичные строки.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if api_key:
+        try:
+            import httpx
+            activities_str = ", ".join(activity_names) if activity_names else "нет"
+            prompt = (
+                f"Пользователь приложения для контроля гидратации. Данные за сегодня:\n"
+                f"- Шаги: {steps}\n"
+                f"- Дистанция: {distance_m / 1000:.1f} км\n"
+                f"- Калории: {int(calories)} ккал\n"
+                f"- Тренировка: {activities_str}, {minutes} мин, интенсивность: {intensity}\n"
+                f"- Вес: {weight_kg} кг\n"
+                f"- Цель воды на сегодня: {daily_goal_ml} мл\n\n"
+                f"Дай один короткий персональный совет по гидратации (1–2 предложения, "
+                f"на русском, без приветствий и без обращений «вы»). "
+                f"Учитывай конкретные данные — не пиши общие фразы."
+            )
+            response = httpx.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key":         api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type":      "application/json",
+                },
+                json={
+                    "model":      "claude-haiku-4-5-20251001",
+                    "max_tokens": 120,
+                    "messages":   [{"role": "user", "content": prompt}],
+                },
+                timeout=6.0,
+            )
+            response.raise_for_status()
+            return response.json()["content"][0]["text"].strip()
+        except Exception as e:
+            print(f"Claude API advice error: {e}")
+
+    return _fallback_advice(steps, intensity, minutes)
+
+
+def _fallback_advice(steps: int, intensity: str, minutes: int) -> str:
     if intensity in ("high", "extreme") and minutes > 0:
         return f"Интенсивная тренировка {minutes} мин — пейте воду каждые 15–20 минут!"
     if steps > 10_000:
@@ -234,7 +287,14 @@ def sync_activity(data: ActivityData, db: Session = Depends(get_db)):
             "workout_ml": breakdown["workout_ml"],
         },
         "advice": generate_advice(
-            data.steps, data.workout_intensity, data.workout_minutes
+            steps=data.steps,
+            intensity=data.workout_intensity,
+            minutes=data.workout_minutes,
+            weight_kg=data.weight_kg,
+            calories=data.calories,
+            distance_m=data.distance_m,
+            daily_goal_ml=breakdown["total"],
+            activity_names=data.activity_names,
         ),
     }
 

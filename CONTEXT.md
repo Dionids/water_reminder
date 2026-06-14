@@ -64,6 +64,12 @@ android/
     src/main/AndroidManifest.xml
     src/main/res/xml/health_permissions.xml
 
+telegram_bot/
+  bot.py               — Telegram-бот (/start /link /today /stats /help)
+  requirements.txt
+  .env.example
+  README.md            — инструкция по запуску и деплою на Railway
+
 backend/
   main.py                      — FastAPI приложение
   requirements.txt
@@ -256,8 +262,8 @@ docker-compose up       # PostgreSQL + FastAPI
 - ~~Восстановление логов воды на новом устройстве~~ ✅ GET /water-logs + restore при старте
 
 **Средний приоритет:**
-- Телеграм-бот с /stats командой (читает из PostgreSQL через FastAPI)
-- AI-советы через Claude API (персонализированные, не if/else)
+- ~~Телеграм-бот с /stats командой~~ ✅ telegram_bot/bot.py + README
+- ~~AI-советы через Claude API~~ ✅ generate_advice() → claude-haiku, фоллбэк если нет ключа
 - Реализовать Wear OS интеграцию (сейчас stub)
 
 **Низкий приоритет:**
