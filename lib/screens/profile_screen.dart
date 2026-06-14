@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/hive_service.dart';
 import '../services/health_service.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final HiveService hiveService;
@@ -25,6 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSaving = false;
   bool _isLoadingFromHealth = false;
   double? _healthWeight;
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
@@ -78,6 +80,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // Пересчитываем базовую норму — сервер уточнит при след. синхронизации
         profile.dailyBaseGoal = (weight * 30).toInt();
         await widget.hiveService.saveProfile(profile);
+
+        // Синхронизируем новый вес с сервером сразу
+        if (profile.firebaseUid != null) {
+          try {
+            await _apiService.upsertUser(
+              firebaseUid:  profile.firebaseUid!,
+              deviceId:     profile.deviceId,
+              displayName:  profile.displayName,
+              email:        profile.email,
+              isAnonymous:  profile.isAnonymous,
+              weightKg:     weight,
+              age:          age,
+            );
+          } catch (e) {
+            // Не критично — вес обновится при следующей синхронизации активности
+            debugPrint('ProfileScreen: не удалось обновить вес на сервере: $e');
+          }
+        }
       }
 
       if (mounted) {

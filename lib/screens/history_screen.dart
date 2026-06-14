@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../services/hive_service.dart';
+import '../services/api_service.dart';
 import '../models/water_log.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -15,11 +16,20 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   List<WaterLog> _logs = [];
   Map<String, double> _dailyTotals = {};
+  final ApiService _apiService = ApiService();
+
+  // Аналитика с сервера
+  int? _avgCompletion;
+  int? _avgSteps;
+  String? _bestDay;
+  String? _worstDay;
+  bool _analyticsLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadLogs();
+    _loadAnalytics();
   }
 
   Future<void> _loadLogs() async {
@@ -33,6 +43,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _logs = logs;
       _dailyTotals = totals;
     });
+  }
+
+  Future<void> _loadAnalytics() async {
+    final profile = widget.hiveService.getProfile();
+    final uid = profile?.firebaseUid;
+    if (uid == null) return;
+
+    setState(() => _analyticsLoading = true);
+    try {
+      final data = await _apiService.getAnalytics(uid, days: 7);
+      if (data != null && mounted) {
+        setState(() {
+          _avgCompletion = data['avg_completion'] as int?;
+          _avgSteps      = data['avg_steps'] as int?;
+          _bestDay       = data['best_day'] as String?;
+          _worstDay      = data['worst_day'] as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint('HistoryScreen: не удалось загрузить аналитику: $e');
+    } finally {
+      if (mounted) setState(() => _analyticsLoading = false);
+    }
   }
 
   /// Последние 7 дней для графика
@@ -64,6 +97,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // ── Карточки аналитики с сервера ──────────────
+                if (_analyticsLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_avgCompletion != null)
+                  _AnalyticsCard(
+                    avgCompletion: _avgCompletion!,
+                    avgSteps: _avgSteps ?? 0,
+                    bestDay: _bestDay,
+                    worstDay: _worstDay,
+                  ),
+
+                if (_avgCompletion != null) const SizedBox(height: 14),
+
                 // ── График 7 дней ─────────────────────────────
                 _WeekChart(last7Days: _last7Days),
                 const SizedBox(height: 16),
@@ -276,5 +325,159 @@ class _Legend extends StatelessWidget {
       const SizedBox(width: 4),
       Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
     ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Карточка аналитики с сервера
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AnalyticsCard extends StatelessWidget {
+  final int avgCompletion;
+  final int avgSteps;
+  final String? bestDay;
+  final String? worstDay;
+
+  const _AnalyticsCard({
+    required this.avgCompletion,
+    required this.avgSteps,
+    this.bestDay,
+    this.worstDay,
+  });
+
+  String _formatDay(String? isoDate) {
+    if (isoDate == null) return '—';
+    try {
+      final dt = DateTime.parse(isoDate);
+      return DateFormat('d MMM', 'ru').format(dt);
+    } catch (_) {
+      return isoDate;
+    }
+  }
+
+  Color get _completionColor {
+    if (avgCompletion >= 80) return const Color(0xFF1E88E5);
+    if (avgCompletion >= 50) return const Color(0xFFFFA000);
+    return const Color(0xFFE53935);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 3)),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.insights_rounded, color: Color(0xFF1565C0), size: 18),
+              SizedBox(width: 8),
+              Text('Статистика за 7 дней',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.water_drop_rounded,
+                  label: 'Норма выполнена',
+                  value: '$avgCompletion%',
+                  color: _completionColor,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.directions_walk_rounded,
+                  label: 'Среднее шагов',
+                  value: avgSteps > 0 ? avgSteps.toString() : '—',
+                  color: const Color(0xFF43A047),
+                ),
+              ),
+            ],
+          ),
+          if (bestDay != null || worstDay != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                if (bestDay != null)
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.emoji_events_rounded,
+                      label: 'Лучший день',
+                      value: _formatDay(bestDay),
+                      color: const Color(0xFF1565C0),
+                    ),
+                  ),
+                if (bestDay != null && worstDay != null) const SizedBox(width: 10),
+                if (worstDay != null)
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.trending_down_rounded,
+                      label: 'Худший день',
+                      value: _formatDay(worstDay),
+                      color: const Color(0xFFE53935),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: color,
+              )),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+              )),
+        ],
+      ),
+    );
   }
 }

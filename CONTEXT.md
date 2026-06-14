@@ -55,6 +55,8 @@ lib/
     api_service.dart           — HTTP клиент для FastAPI бэкенда
     sync_service.dart          — WorkManager фоновая синхронизация + SyncState
     notification_service.dart  — уведомления о гидратации
+    wear_sync_service.dart     — заглушка Wear OS (stub, no-op, к реализации позже)
+    home_widget_service.dart   — обновление виджета домашнего экрана
 
 android/
   app/
@@ -231,13 +233,15 @@ docker-compose up       # PostgreSQL + FastAPI
 
 ## Известные проблемы и технический долг
 
-1. **applicationId = "com.example.untitled1"** — нужно переименовать перед релизом
+1. **applicationId = "com.example.untitled1"** — нужно переименовать перед релизом (→ com.dionids.aquatrack)
 2. **activity_cache.dart** — мёртвый код, не используется, нужно удалить
 3. **baseUrl захардкожен** — нужен env-конфиг для прод URL бэкенда
 4. **Бэкенд задеплоен** — https://lovely-trust-production-ad76.up.railway.app ✅
-5. **ProfileScreen** — не передаёт обновлённый вес на сервер при сохранении
-6. **Аналитика** — GET /analytics реализована на бэкенде, но не показывается в приложении
-7. **fl_chart** — подключён, используется только в HistoryScreen (7 дней). Можно добавить на главный экран
+5. **~~ProfileScreen~~** — ~~не передаёт обновлённый вес на сервер~~ ✅ исправлено: upsertUser() при сохранении
+6. **~~Аналитика~~** — ✅ карточки avg_completion / avg_steps / best_day добавлены в HistoryScreen
+7. **~~wear_sync_service.dart отсутствовал~~** — ✅ добавлен stub, проект компилируется
+8. **~~home_widget не в pubspec~~** — ✅ добавлен home_widget: ^0.7.0
+9. **qualifiedAndroidName** в home_widget_service.dart — обновить при переименовании applicationId
 
 ---
 
@@ -245,15 +249,15 @@ docker-compose up       # PostgreSQL + FastAPI
 
 **Высокий приоритет:**
 - ~~Задеплоить бэкенд на Railway~~ ✅ https://lovely-trust-production-ad76.up.railway.app
+- ~~ProfileScreen — вес не отправлялся на сервер~~ ✅ исправлено
+- ~~Показать аналитику в приложении~~ ✅ добавлено в HistoryScreen
 - Заменить applicationId на com.dionids.aquatrack
-- Показать аналитику в приложении (экран статистики)
 
 **Средний приоритет:**
 - Телеграм-бот с /stats командой (читает из PostgreSQL через FastAPI)
 - AI-советы через Claude API (персонализированные, не if/else)
-- ProfileScreen → при сохранении веса отправлять на сервер
+- Реализовать Wear OS интеграцию (сейчас stub)
 
 **Низкий приоритет:**
 - Удалить activity_cache.dart
-- Виджет рабочего стола (home_widget)
 - Unit-тесты на формулу расчёта нормы
