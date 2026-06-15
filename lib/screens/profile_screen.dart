@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/hive_service.dart';
 import '../services/health_service.dart';
 import '../services/auth_service.dart';
@@ -417,6 +418,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       borderRadius: BorderRadius.circular(10)),
                 ),
               ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          // Firebase UID — для привязки Telegram-бота (/link команда)
+          if (profile?.firebaseUid != null) ...[
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.tag_rounded, size: 14, color: Colors.grey),
+                const SizedBox(width: 6),
+                const Text('Firebase UID',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(
+                        ClipboardData(text: profile!.firebaseUid!));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('UID скопирован'),
+                        duration: Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  child: const Icon(Icons.copy_rounded,
+                      size: 16, color: Color(0xFF1565C0)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              profile!.firebaseUid!,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+                fontFamily: 'monospace',
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Используй UID для команды /link в Telegram-боте',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],
 
