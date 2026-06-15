@@ -7,9 +7,38 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:624904190292:android:a144397f5cf0cf5f6a30c1",
+        "mobilesdk_app_id": "1:624904190292:android:eff0dd41c97880826a30c1",
         "android_client_info": {
           "package_name": "com.dionids.aquatrack"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "624904190292-rufut8a3q3r5guea0v3dgkmo0l68sh5n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBth_A2DMCkfNKTz9iWBkT2E8RPZLwyfcs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "624904190292-rufut8a3q3r5guea0v3dgkmo0l68sh5n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:624904190292:android:a144397f5cf0cf5f6a30c1",
+        "android_client_info": {
+          "package_name": "com.example.untitled1"
         }
       },
       "oauth_client": [
@@ -17,7 +46,7 @@
           "client_id": "624904190292-vv2m431k87a77e6dk0letttuq93q2vvn.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.dionids.aquatrack",
+            "package_name": "com.example.untitled1",
             "certificate_hash": "4254b065da6e7eedecf1a20a100666ee4c8eee01"
           }
         },
