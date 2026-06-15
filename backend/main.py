@@ -152,10 +152,11 @@ def generate_advice(
     activity_names: list = None,
 ) -> str:
     """
-    Генерирует персонализированный совет через Claude API.
+    Генерирует персонализированный совет через Google Gemini API (бесплатно, 1500 req/day).
     При недоступности API или отсутствии ключа — фоллбэк на статичные строки.
+    Ключ: GEMINI_API_KEY из переменных окружения (aistudio.google.com).
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if api_key:
         try:
             import httpx
@@ -173,23 +174,15 @@ def generate_advice(
                 f"Учитывай конкретные данные — не пиши общие фразы."
             )
             response = httpx.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key":         api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type":      "application/json",
-                },
-                json={
-                    "model":      "claude-haiku-4-5-20251001",
-                    "max_tokens": 120,
-                    "messages":   [{"role": "user", "content": prompt}],
-                },
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}",
+                headers={"content-type": "application/json"},
+                json={"contents": [{"parts": [{"text": prompt}]}]},
                 timeout=6.0,
             )
             response.raise_for_status()
-            return response.json()["content"][0]["text"].strip()
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         except Exception as e:
-            print(f"Claude API advice error: {e}")
+            print(f"Gemini API advice error: {e}")
 
     return _fallback_advice(steps, intensity, minutes)
 

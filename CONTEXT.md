@@ -269,7 +269,7 @@ docker-compose up       # PostgreSQL + FastAPI
   test_water_goal_formula.py  — 27 Python unit-тестов формулы (pytest)
 
 telegram_bot/bot.py + README
-- ~~AI-советы через Claude API~~ ✅ generate_advice() → claude-haiku, фоллбэк если нет ключа
+- ~~AI-советы через Claude API~~ ✅ generate_advice() → Gemini 1.5 Flash (бесплатно 1500/день), фоллбэк если нет ключа
 - Реализовать Wear OS интеграцию (сейчас stub)
 
 **Низкий приоритет:**
