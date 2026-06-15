@@ -18,6 +18,7 @@ import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/test_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -162,6 +163,10 @@ class MyApp extends StatelessWidget {
               hiveService: hiveService,
               healthService: healthService,
               authService: authService,
+            ),
+        '/test': (context) => TestScreen(
+              hiveService: hiveService,
+              apiService: apiService,
             ),
       },
     );
@@ -544,6 +549,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   onPressed: () => _syncHealthData(silent: false),
                   tooltip: 'Синхронизировать',
                 ),
+              IconButton(
+                icon: const Icon(Icons.science_outlined),
+                tooltip: 'Тест',
+                onPressed: () async {
+                  await Navigator.pushNamed(context, '/test');
+                  _loadData();
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.person_outline_rounded),
                 onPressed: () async {
