@@ -108,12 +108,13 @@ class ActivityData(BaseModel):
     activity_names:    List[str] = []
     calories:          float = 0.0
     distance_m:        float = 0.0
+    log_date:          Optional[str] = None  # YYYY-MM-DD, по умолчанию сегодня
 
 
 class WaterLogCreate(BaseModel):
     firebase_uid: str
     amount_ml:    float
-    logged_at:    Optional[datetime] = None
+    logged_at:    Optional[datetime] = None  # можно передать прошлую дату
 
 
 # ──────────────────────────────────────────────
@@ -241,7 +242,13 @@ def sync_activity(data: ActivityData, db: Session = Depends(get_db)):
     )
 
     # Upsert в activity_logs (один раз в день)
-    today = date.today()
+    if data.log_date:
+        try:
+            today = datetime.strptime(data.log_date, "%Y-%m-%d").date()
+        except ValueError:
+            today = date.today()
+    else:
+        today = date.today()
     log = (db.query(ActivityLog)
            .filter(ActivityLog.firebase_uid == data.firebase_uid,
                    ActivityLog.log_date == today)

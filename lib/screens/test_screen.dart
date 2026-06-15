@@ -33,6 +33,7 @@ class _TestScreenState extends State<TestScreen> {
 
   WorkoutIntensity _intensity = WorkoutIntensity.medium;
   String _activityName = 'Бег';
+  DateTime _selectedDate = DateTime.now(); // дата для исторических данных
 
   // ── Результаты после отправки ─────────────────────────────────
   bool   _isLoading     = false;
@@ -57,6 +58,32 @@ class _TestScreenState extends State<TestScreen> {
     WorkoutIntensity.high:    'Высокая (бег, велосипед)',
     WorkoutIntensity.extreme: 'Экстремальная (HIIT, кроссфит)',
   };
+
+  bool get _isToday {
+    final now = DateTime.now();
+    return _selectedDate.year == now.year &&
+        _selectedDate.month == now.month &&
+        _selectedDate.day == now.day;
+  }
+
+  String get _dateLabel {
+    if (_isToday) return 'Сегодня';
+    final d = _selectedDate;
+    final months = ['янв','фев','мар','апр','май','июн',
+                    'июл','авг','сен','окт','ноя','дек'];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+      helpText: 'Выберите дату',
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
 
   @override
   void initState() {
@@ -129,6 +156,7 @@ class _TestScreenState extends State<TestScreen> {
         activityNames:    activityNames,
         calories:         calories,
         distanceM:        distance,
+        logDate:          _isToday ? null : _selectedDate,
       );
 
       if (!mounted) return;
@@ -166,11 +194,21 @@ class _TestScreenState extends State<TestScreen> {
 
     setState(() { _isLoading = true; _errorMsg = null; });
     try {
-      final log = await widget.hiveService.addWaterLog(amount);
+      // Для исторических дат — создаём запись с нужным временем
+      final logDate = _isToday
+          ? DateTime.now()
+          : DateTime(_selectedDate.year, _selectedDate.month,
+              _selectedDate.day, 12, 0); // полдень прошлого дня
+
+      final log = _isToday
+          ? await widget.hiveService.addWaterLog(amount)
+          : await widget.hiveService.addWaterLogFromServer(
+              amount: amount, date: logDate);
+
       await widget.apiService.logWater(
         firebaseUid: profile.id,
         amountMl:    amount,
-        loggedAt:    log.date,
+        loggedAt:    logDate,
       );
       await widget.hiveService.markLogSynced(log);
 
@@ -200,6 +238,78 @@ class _TestScreenState extends State<TestScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Выбор даты ───────────────────────────────────────
+            _Card(child: Row(
+              children: [
+                const Icon(Icons.calendar_today_rounded,
+                    size: 18, color: Color(0xFF1565C0)),
+                const SizedBox(width: 10),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Дата записи',
+                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    Text(_dateLabel,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15)),
+                  ],
+                )),
+                if (!_isToday)
+                  GestureDetector(
+                    onTap: () => setState(() => _selectedDate = DateTime.now()),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3F2FD),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('Сегодня',
+                          style: TextStyle(
+                              fontSize: 11, color: Color(0xFF1565C0))),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _pickDate,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1565C0),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    textStyle: const TextStyle(fontSize: 13),
+                  ),
+                  child: const Text('Изменить'),
+                ),
+              ],
+            )),
+
+            if (!_isToday) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFFCC02)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.history_rounded,
+                      size: 14, color: Color(0xFFF57F17)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Запись за $_dateLabel — данные уйдут в историю',
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFFF57F17)),
+                  ),
+                ]),
+              ),
+            ],
+
+            const SizedBox(height: 16),
             const _SectionLabel('💧 Вода'),
             _Card(child: Column(
               children: [

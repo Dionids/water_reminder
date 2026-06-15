@@ -84,6 +84,7 @@ class ApiService {
     List<String> activityNames = const [],
     double calories = 0,
     double distanceM = 0,
+    DateTime? logDate,
   }) async {
     return _post('/sync-activity', {
       'firebase_uid':      firebaseUid,
@@ -94,6 +95,8 @@ class ApiService {
       'activity_names':    activityNames,
       'calories':          calories,
       'distance_m':        distanceM,
+      if (logDate != null)
+        'log_date': '${logDate.year}-${logDate.month.toString().padLeft(2,'0')}-${logDate.day.toString().padLeft(2,'0')}',
     });
   }
 
