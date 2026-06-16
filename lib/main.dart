@@ -735,22 +735,26 @@ class _HeroWaterCard extends StatelessWidget {
                 const SizedBox(width: 20),
                 // Большой круговой индикатор
                 SizedBox(
-                  width: 90,
-                  height: 90,
+                  width: 110,
+                  height: 110,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 8,
-                        backgroundColor: Colors.white.withOpacity(0.25),
-                        valueColor: const AlwaysStoppedAnimation(Colors.white),
+                      SizedBox(
+                        width: 110,
+                        height: 110,
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 10,
+                          backgroundColor: Colors.white.withOpacity(0.25),
+                          valueColor: const AlwaysStoppedAnimation(Colors.white),
+                        ),
                       ),
                       Text(
                         '$pct%',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
                       ),

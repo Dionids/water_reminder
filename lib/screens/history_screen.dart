@@ -16,6 +16,7 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   List<WaterLog> _logs = [];
   Map<String, double> _dailyTotals = {};
+  List<Map<String, dynamic>> _serverDays = []; // данные по дням с сервера
   final ApiService _apiService = ApiService();
 
   // Аналитика с сервера
@@ -54,11 +55,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
     try {
       final data = await _apiService.getAnalytics(uid, days: 7);
       if (data != null && mounted) {
+        final days = (data['days'] as List<dynamic>? ?? [])
+            .map((d) => d as Map<String, dynamic>)
+            .toList();
+
+        // Строим _dailyTotals из серверных данных (дополняет локальные логи)
+        final serverTotals = <String, double>{};
+        for (final d in days) {
+          final dateKey = d['date'] as String?;
+          final consumed = (d['consumed_ml'] as num?)?.toDouble() ?? 0;
+          if (dateKey != null && consumed > 0) {
+            serverTotals[dateKey] = consumed;
+          }
+        }
+
         setState(() {
           _avgCompletion = data['avg_completion'] as int?;
           _avgSteps      = data['avg_steps'] as int?;
           _bestDay       = data['best_day'] as String?;
           _worstDay      = data['worst_day'] as String?;
+          _serverDays    = days;
+          // Мержим: локальные данные приоритетнее (они точнее),
+          // серверные заполняют пробелы
+          for (final entry in serverTotals.entries) {
+            if (!_dailyTotals.containsKey(entry.key) ||
+                _dailyTotals[entry.key] == 0) {
+              _dailyTotals[entry.key] = entry.value;
+            }
+          }
         });
       }
     } catch (e) {
