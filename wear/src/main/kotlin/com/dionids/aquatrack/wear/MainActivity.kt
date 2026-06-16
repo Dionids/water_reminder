@@ -9,8 +9,6 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.wear.tiles.TileService
-import android.content.ComponentName
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
@@ -22,7 +20,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "WearMainActivity"
-        private const val PREF_TILE_REQUESTED = "tile_add_requested"
         const val ACTION_ADD_WATER = "add_water"
     }
 
@@ -95,17 +92,9 @@ class MainActivity : ComponentActivity() {
      * Показывает системный диалог «Добавить карточку AquaTrack?» один раз.
      */
     private fun requestTileAddIfNeeded() {
-        val prefs = getSharedPreferences(WaterDataStore.PREFS_NAME_CONST, MODE_PRIVATE)
-        if (prefs.getBoolean(PREF_TILE_REQUESTED, false)) return
-
-        try {
-            val component = ComponentName(this, AquaTileService::class.java)
-            TileService.requestTileAdd(this, component)
-            prefs.edit().putBoolean(PREF_TILE_REQUESTED, true).apply()
-            Log.d(TAG, "requestTileAdd called")
-        } catch (e: Exception) {
-            Log.w(TAG, "requestTileAdd failed: $e")
-        }
+        // Плитка автоматически появляется в списке добавления на часах
+        // после установки приложения — ручной вызов requestTileAdd не нужен.
+        Log.d(TAG, "Tile available via + button on watch")
     }
 
     private fun refreshData() {
