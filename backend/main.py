@@ -227,10 +227,15 @@ def upsert_user(data: UserUpsert, db: Session = Depends(get_db)):
 
 @app.post("/sync-activity", summary="Синхронизация активности + пересчёт нормы")
 def sync_activity(data: ActivityData, db: Session = Depends(get_db)):
-    # Проверяем что пользователь существует
+    # Находим или создаём пользователя автоматически
     user = db.query(User).filter(User.firebase_uid == data.firebase_uid).first()
     if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден. Сначала вызови /user")
+        user = User(
+            firebase_uid=data.firebase_uid,
+            weight_kg=data.weight_kg,
+        )
+        db.add(user)
+        db.commit()
 
     # Обновляем вес если передан
     if data.weight_kg and data.weight_kg != user.weight_kg:

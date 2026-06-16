@@ -320,19 +320,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       goalMl: _dailyGoal.toDouble(),
     );
 
-    // Пробуем сразу отправить на сервер
     final profile = widget.hiveService.getProfile();
     if (profile?.firebaseUid != null) {
       try {
+        // Отправляем лог воды на сервер
         await _apiService.logWater(
           firebaseUid: profile!.firebaseUid!,
           amountMl:    amount,
           loggedAt:    log.date,
         );
-        // Успешно — помечаем как синхронизированный
         await widget.hiveService.markLogSynced(log);
+
+        // Обновляем activity_logs за сегодня — чтобы сервер знал актуальные данные
+        // даже если Health Connect не дал новых данных
+        await _apiService.syncActivity(
+          firebaseUid:      profile.firebaseUid!,
+          steps:            _steps,
+          weightKg:         _weight > 0 ? _weight : (profile.weight ?? 70.0),
+          workoutMinutes:   _workoutMinutes,
+          workoutIntensity: _workoutIntensity,
+          activityNames:    _activityNames,
+          calories:         _calories,
+          distanceM:        _distance,
+        );
       } catch (_) {
-        // Офлайн — лог остаётся synced=false, отправится при следующей синхронизации
         debugPrint('Water log queued offline: $amount мл');
       }
     }
