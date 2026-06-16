@@ -25,3 +25,5 @@ plugins {
 }
 
 include(":app")
+include(":wear")
+project(":wear").projectDir = file("../wear")

@@ -1,25 +1,49 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
-/// Заглушка WearSyncService.
-/// Wear OS интеграция не реализована — все методы no-op,
-/// Stream не генерирует событий.
-/// Когда понадобится реальная Wear OS — заменить на wear + wearable_communication.
+/// Реальный WearSyncService — общается с нативным WearSyncChannel.kt
+/// через MethodChannel (телефон → часы) и EventChannel (часы → телефон).
 class WearSyncService {
   static final WearSyncService _instance = WearSyncService._();
   factory WearSyncService() => _instance;
   WearSyncService._();
 
-  /// Stream событий «добавить воду» с часов.
-  /// Заглушка — никогда не испускает значений.
-  Stream<int> get watchAddWaterStream => const Stream<int>.empty();
+  static const _method = MethodChannel('com.dionids.aquatrack/wear_sync');
+  static const _event  = EventChannel('com.dionids.aquatrack/wear_events');
 
-  /// Отправить текущий прогресс на часы.
+  Stream<int>? _watchStream;
+
+  /// Stream событий «добавить воду» с часов.
+  /// Испускает количество добавленных мл когда пользователь нажал + на часах.
+  Stream<int> get watchAddWaterStream {
+    _watchStream ??= _event
+        .receiveBroadcastStream()
+        .map((event) {
+          if (event is Map) return (event['added_ml'] as int?) ?? 250;
+          return 250;
+        })
+        .handleError((e) {
+          debugPrint('WearSyncService event error: $e');
+        });
+    return _watchStream!;
+  }
+
+  /// Отправить текущий прогресс на часы — обновляет плитку и экран часов.
   Future<void> pushToWatch({
     required int currentMl,
     required int goalMl,
   }) async {
-    debugPrint('WearSyncService.pushToWatch (stub): $currentMl / $goalMl мл');
+    try {
+      await _method.invokeMethod('syncToWatch', {
+        'current_ml': currentMl,
+        'goal_ml':    goalMl,
+        'timestamp':  DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (e) {
+      // Часы не подключены — не критично
+      debugPrint('WearSyncService.pushToWatch: $e');
+    }
   }
 
   /// Отправить расписание напоминания на часы.
@@ -28,9 +52,14 @@ class WearSyncService {
     required int glassIndex,
     required int totalGlasses,
   }) async {
-    debugPrint(
-      'WearSyncService.sendReminderToWatch (stub): '
-      'glass $glassIndex/$totalGlasses at $scheduledAt',
-    );
+    try {
+      await _method.invokeMethod('scheduleWatchReminder', {
+        'scheduled_at':  scheduledAt,
+        'glass_index':   glassIndex,
+        'total_glasses': totalGlasses,
+      });
+    } catch (e) {
+      debugPrint('WearSyncService.sendReminderToWatch: $e');
+    }
   }
 }

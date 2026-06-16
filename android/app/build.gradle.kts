@@ -37,6 +37,8 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // Wear OS companion — упаковывает APK часов внутрь телефонного APK
+    wearApp(project(":wear"))
 }
 
 flutter {
