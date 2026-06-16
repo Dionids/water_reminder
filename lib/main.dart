@@ -90,6 +90,7 @@ void main() async {
     healthService: healthService,
     notificationService: notificationService,
     hasExistingProfile: existingProfile?.weight != null,
+    apiService: ApiService(),
   ));
 }
 
@@ -99,6 +100,7 @@ class MyApp extends StatelessWidget {
   final HealthService healthService;
   final NotificationService notificationService;
   final bool hasExistingProfile;
+  final ApiService apiService;
 
   const MyApp({
     super.key,
@@ -107,6 +109,7 @@ class MyApp extends StatelessWidget {
     required this.healthService,
     required this.notificationService,
     required this.hasExistingProfile,
+    required this.apiService,
   });
 
   @override
@@ -466,14 +469,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
   }
 
-  /// Читает данные сна из Health Connect и планирует уведомления о воде.
-  /// Вызывается после каждой синхронизации активности.
+  /// Планирует уведомления о воде с фиксированным окном бодрствования.
   Future<void> _scheduleWaterReminders(int goalMl) async {
     try {
-      final sleepWindow = await widget.healthService.fetchSleepWindow();
+      final now   = DateTime.now();
+      final wake  = DateTime(now.year, now.month, now.day, 7, 0);
+      final bed   = DateTime(now.year, now.month, now.day, 23, 0);
       await widget.notificationService.scheduleDailyWaterReminders(
-        wakeTime: sleepWindow.wakeTime,
-        bedTime:  sleepWindow.bedTime,
+        wakeTime: wake,
+        bedTime:  bed,
         goalMl:   goalMl,
       );
     } catch (e) {
