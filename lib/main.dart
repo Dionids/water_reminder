@@ -55,29 +55,34 @@ void main() async {
   final existingProfile = await authService.initializeAuth();
 
   // Если Hive пустой (новое устройство), но пользователь уже авторизован —
-  // подтягиваем логи воды за сегодня с сервера
+  // подтягиваем логи воды за последние 7 дней с сервера
   if (existingProfile?.firebaseUid != null) {
     final todayTotal = await hiveService.getTotalWaterToday();
     if (todayTotal == 0) {
       try {
         final apiService = ApiService();
-        final today = DateTime.now();
-        final dateStr =
-            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-        final serverLogs = await apiService.getWaterLogs(
-          existingProfile!.firebaseUid!,
-          date: dateStr,
-        );
-        final logs = serverLogs?['logs'] as List<dynamic>?;
-        if (logs != null && logs.isNotEmpty) {
-          for (final entry in logs) {
-            final amountMl = (entry['amount_ml'] as num).toDouble();
-            final loggedAt = DateTime.parse(entry['logged_at'] as String);
-            // Сохраняем локально как уже синхронизированный лог
-            await hiveService.addWaterLogFromServer(amount: amountMl, date: loggedAt);
+        int restored = 0;
+        // Восстанавливаем каждый из последних 7 дней
+        for (int i = 0; i < 7; i++) {
+          final day = DateTime.now().subtract(Duration(days: i));
+          final dateStr =
+              '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+          final serverLogs = await apiService.getWaterLogs(
+            existingProfile!.firebaseUid!,
+            date: dateStr,
+          );
+          final logs = serverLogs?['logs'] as List<dynamic>?;
+          if (logs != null && logs.isNotEmpty) {
+            for (final entry in logs) {
+              final amountMl = (entry['amount_ml'] as num).toDouble();
+              final loggedAt = DateTime.parse(entry['logged_at'] as String);
+              await hiveService.addWaterLogFromServer(
+                  amount: amountMl, date: loggedAt);
+              restored++;
+            }
           }
-          debugPrint('Восстановлено ${logs.length} логов воды с сервера');
         }
+        debugPrint('Восстановлено $restored логов воды с сервера (7 дней)');
       } catch (e) {
         debugPrint('Не удалось восстановить логи воды: $e');
       }
@@ -520,7 +525,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final pct = (_todayWater / _dailyGoal * 100).clamp(0, 100).toInt();
+    final pct = _dailyGoal > 0
+        ? (_todayWater / _dailyGoal * 100).clamp(0, 100).toInt()
+        : 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4F8),
@@ -534,8 +541,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             elevation: 0,
             title: const Text(
               'AquaTrack',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22),
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+              overflow: TextOverflow.visible,
             ),
+            titleSpacing: 8,
             actions: [
               // Индикатор свежести данных
               _SyncStatusChip(syncState: _syncState),

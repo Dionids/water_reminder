@@ -320,15 +320,14 @@ class _TestScreenState extends State<TestScreen> {
                   suffix: 'мл',
                 ),
                 const SizedBox(height: 10),
-                Row(children: [
-                  ...[150, 200, 250, 330, 500].map((ml) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _QuickChip(
-                      label: '${ml}мл',
-                      onTap: () => _waterAmountCtrl.text = ml.toString(),
-                    ),
-                  )),
-                ]),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [150, 200, 250, 330, 500].map((ml) => _QuickChip(
+                    label: '${ml}мл',
+                    onTap: () => _waterAmountCtrl.text = ml.toString(),
+                  )).toList(),
+                ),
                 const SizedBox(height: 12),
                 _ActionButton(
                   label: 'Добавить воду',
@@ -409,15 +408,14 @@ class _TestScreenState extends State<TestScreen> {
                   suffix: 'ч', decimal: true,
                 ),
                 const SizedBox(height: 8),
-                Row(children: [
-                  ...[6.0, 7.0, 7.5, 8.0, 9.0].map((h) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _QuickChip(
-                      label: '${h}ч',
-                      onTap: () => _sleepHoursCtrl.text = h.toString(),
-                    ),
-                  )),
-                ]),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [6.0, 7.0, 7.5, 8.0, 9.0].map((h) => _QuickChip(
+                    label: '${h}ч',
+                    onTap: () => _sleepHoursCtrl.text = h.toString(),
+                  )).toList(),
+                ),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(10),
