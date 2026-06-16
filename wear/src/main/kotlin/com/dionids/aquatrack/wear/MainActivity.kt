@@ -98,15 +98,14 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences(WaterDataStore.PREFS_NAME_CONST, MODE_PRIVATE)
         if (prefs.getBoolean(PREF_TILE_REQUESTED, false)) return
 
-        val component = ComponentName(this, AquaTileService::class.java)
-        TileService.requestTileAdd(this, component)
-            .addOnSuccessListener { result ->
-                Log.d(TAG, "requestTileAdd result: $result")
-                prefs.edit().putBoolean(PREF_TILE_REQUESTED, true).apply()
-            }
-            .addOnFailureListener { e ->
-                Log.w(TAG, "requestTileAdd failed: ${e.message}")
-            }
+        try {
+            val component = ComponentName(this, AquaTileService::class.java)
+            TileService.requestTileAdd(this, component)
+            prefs.edit().putBoolean(PREF_TILE_REQUESTED, true).apply()
+            Log.d(TAG, "requestTileAdd called")
+        } catch (e: Exception) {
+            Log.w(TAG, "requestTileAdd failed: $e")
+        }
     }
 
     private fun refreshData() {

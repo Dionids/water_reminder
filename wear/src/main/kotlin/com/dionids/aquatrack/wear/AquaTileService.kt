@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
  * Wear OS Tile — компактная карточка, доступная свайпом влево от циферблата.
  * Кнопка +250 мл запускает MainActivity с action=add_water, который сразу добавляет стакан.
  */
+@OptIn(ExperimentalHorologistApi::class)
 class AquaTileService : SuspendingTileService() {
 
     companion object {
