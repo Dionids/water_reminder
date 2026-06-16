@@ -4,11 +4,13 @@ import 'package:http/http.dart' as http;
 import 'health_service.dart';
 
 class ApiService {
-  // Для эмулятора: 10.0.2.2
-  // Для физического устройства: IP твоего компьютера или Railway URL
+  // URL выбирается по приоритету:
+  // 1. Переменная окружения API_BASE_URL (передаётся через --dart-define при сборке)
+  // 2. В debug-режиме: 10.0.2.2 (эмулятор) или Railway (физическое устройство)
+  // 3. Прод Railway URL как финальный fallback
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000',
+    defaultValue: 'https://lovely-trust-production-ad76.up.railway.app',
   );
 
   String get baseUrl => _baseUrl;

@@ -31,9 +31,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Простое хранилище telegram_id → firebase_uid в памяти.
-# Для продакшена замените на БД (таблица telegram_links в PostgreSQL).
-_uid_store: dict[int, str] = {}
+# Хранилище telegram_id → firebase_uid.
+# Сохраняется в файл uid_store.json рядом с bot.py,
+# чтобы переживать перезапуски бота на Railway.
+import json as _json
+
+_UID_STORE_FILE = os.path.join(os.path.dirname(__file__), "uid_store.json")
+
+def _load_uid_store() -> dict:
+    try:
+        with open(_UID_STORE_FILE, "r") as f:
+            return {int(k): v for k, v in _json.load(f).items()}
+    except (FileNotFoundError, ValueError, _json.JSONDecodeError):
+        return {}
+
+def _save_uid_store(store: dict) -> None:
+    try:
+        with open(_UID_STORE_FILE, "w") as f:
+            _json.dump({str(k): v for k, v in store.items()}, f)
+    except Exception as e:
+        logger.warning("Не удалось сохранить uid_store: %s", e)
+
+_uid_store: dict[int, str] = _load_uid_store()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -42,6 +61,10 @@ _uid_store: dict[int, str] = {}
 
 def _get_uid(telegram_id: int) -> str | None:
     return _uid_store.get(telegram_id)
+
+def _set_uid(telegram_id: int, uid: str) -> None:
+    _uid_store[telegram_id] = uid
+    _save_uid_store(_uid_store)
 
 
 async def _api_get(path: str) -> dict | None:
@@ -102,16 +125,17 @@ async def cmd_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     uid = ctx.args[0].strip()
 
-    # Проверяем что пользователь существует на сервере
-    data = await _api_get(f"/analytics/{uid}?days=1")
+    # Проверяем что пользователь существует на сервере через аналитику
+    # (достаточно чтобы пользователь прошёл /user — т.е. просто запустил приложение)
+    data = await _api_get(f"/analytics/{uid}?days=7")
     if data is None:
         await update.message.reply_text(
             "❌ Пользователь с таким UID не найден.\n"
-            "Убедись что приложение синхронизировалось хотя бы раз."
+            "Убедись что приложение запущено и выполнена хотя бы одна синхронизация."
         )
         return
 
-    _uid_store[update.effective_user.id] = uid
+    _set_uid(update.effective_user.id, uid)
     await update.message.reply_text(
         f"✅ Аккаунт привязан!\n\n"
         f"Теперь используй:\n"

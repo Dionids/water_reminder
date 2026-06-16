@@ -389,9 +389,9 @@ def get_water_logs(firebase_uid: str, date: Optional[str] = None, db: Session = 
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    # Парсим дату фильтра
+    # Парсим дату фильтра (date_str чтобы не затенять модуль date)
     try:
-        filter_date = datetime.strptime(date, "%Y-%m-%d").date() if date else date.today()
+        filter_date = datetime.strptime(date, "%Y-%m-%d").date() if date else datetime.now().date()
     except (ValueError, AttributeError):
         filter_date = datetime.now().date()
 

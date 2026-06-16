@@ -75,7 +75,8 @@ class HiveService {
     final today = DateTime(now.year, now.month, now.day);
     double total = 0.0;
     for (final log in box.values) {
-      if (log.date.isAfter(today)) total += log.amount;
+      // isAfter(today) пропускает записи ровно в полночь — используем !isBefore
+      if (!log.date.isBefore(today)) total += log.amount;
     }
     return total;
   }
