@@ -13,5 +13,3 @@ plugins {
 }
 
 rootProject.name = "wear"
-include(":wear")
-project(":wear").projectDir = file(".")
