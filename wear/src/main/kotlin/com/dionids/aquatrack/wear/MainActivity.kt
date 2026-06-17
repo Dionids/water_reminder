@@ -125,16 +125,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun syncToPhone(currentMl: Int, goalMl: Int) {
-        // MessageClient — работает напрямую по BT без Google аккаунта
+        // Отправляем ОБОИМИ каналами параллельно для максимальной надёжности:
+        // 1. MessageClient — мгновенная доставка когда приложение открыто (BT/Wi-Fi)
+        // 2. DataClient —persistent доставка даже когда приложение закрыто
+        syncViaMessage(currentMl, goalMl)
+        syncViaDataLayer(currentMl, goalMl)
+    }
+
+    private fun syncViaMessage(currentMl: Int, goalMl: Int) {
         val messageClient = com.google.android.gms.wearable.Wearable.getMessageClient(this)
         val nodeClient    = com.google.android.gms.wearable.Wearable.getNodeClient(this)
-
         val payload = "$currentMl,$goalMl,${WaterDataStore.GLASS_ML}".toByteArray()
 
         nodeClient.connectedNodes.addOnSuccessListener { nodes ->
             if (nodes.isEmpty()) {
-                Log.w(TAG, "No connected nodes (phone not reachable via BT)")
-                syncViaDataLayer(currentMl, goalMl)
+                Log.w(TAG, "No connected nodes via MessageClient")
                 finishIfFromTile()
                 return@addOnSuccessListener
             }
@@ -146,14 +151,12 @@ class MainActivity : ComponentActivity() {
                         if (--pending == 0) finishIfFromTile()
                     }
                     .addOnFailureListener {
-                        Log.w(TAG, "Message failed to ${node.displayName}: ${it.message}")
-                        syncViaDataLayer(currentMl, goalMl)
+                        Log.w(TAG, "Message failed: ${it.message}")
                         if (--pending == 0) finishIfFromTile()
                     }
             }
         }.addOnFailureListener {
             Log.w(TAG, "NodeClient failed: ${it.message}")
-            syncViaDataLayer(currentMl, goalMl)
             finishIfFromTile()
         }
     }
