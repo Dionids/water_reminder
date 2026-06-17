@@ -63,8 +63,9 @@ class MainActivity : ComponentActivity() {
      */
     private fun handleIntent(intent: Intent?) {
         if (intent?.getStringExtra("action") == ACTION_ADD_WATER) {
-            Log.d(TAG, "Tile button: adding glass from intent")
+            Log.d(TAG, "Tile button: adding glass, closing UI")
             addGlassAndSync()
+            finish()  // закрываем Activity — пользователь остаётся на плитке
         }
     }
 
