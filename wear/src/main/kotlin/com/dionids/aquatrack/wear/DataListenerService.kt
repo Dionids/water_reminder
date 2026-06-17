@@ -32,8 +32,15 @@ class DataListenerService : WearableListenerService() {
                     val dataMap   = DataMapItem.fromDataItem(event.dataItem).dataMap
                     val currentMl = dataMap.getInt("current_ml", -1)
                     val goalMl    = dataMap.getInt("goal_ml", -1)
+                    val uid       = dataMap.getString("firebase_uid", null)
                     if (currentMl >= 0 && goalMl > 0) {
                         WaterDataStore.saveWaterData(this, currentMl, goalMl)
+                        // Сохраняем uid чтобы часы могли сами звать бэкенд
+                        if (uid != null) {
+                            getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                                .edit().putString("flutter.firebase_uid", uid).apply()
+                            Log.d(TAG, "Saved firebase_uid on watch")
+                        }
                         AquaTileService.requestUpdate(this)
                     }
                 }

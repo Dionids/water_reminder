@@ -56,15 +56,20 @@ object WearSyncChannel {
     }
 
     private fun sendDataToWatch(context: Context, currentMl: Int, goalMl: Int, timestamp: Long) {
+        // Получаем firebase_uid из SharedPreferences Flutter
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val uid = prefs.getString("flutter.firebase_uid", null)
+
         val request = PutDataMapRequest.create("/aquatrack/sync").apply {
             dataMap.putInt("current_ml", currentMl)
             dataMap.putInt("goal_ml", goalMl)
             dataMap.putLong("timestamp", timestamp)
+            if (uid != null) dataMap.putString("firebase_uid", uid)
         }.asPutDataRequest().setUrgent()
 
         Wearable.getDataClient(context)
             .putDataItem(request)
-            .addOnSuccessListener { Log.d(TAG, "Data sent to watch: $currentMl/$goalMl ml") }
+            .addOnSuccessListener { Log.d(TAG, "Data sent to watch: $currentMl/$goalMl ml, uid=$uid") }
             .addOnFailureListener { Log.w(TAG, "Watch not connected: ${it.message}") }
     }
 
