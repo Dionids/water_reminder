@@ -232,9 +232,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const Icon(Icons.health_and_safety_rounded,
                                   size: 14, color: Color(0xFF1565C0)),
                               const SizedBox(width: 6),
-                              Text(
-                                'Health Connect: ${_healthWeight!.toStringAsFixed(1)} кг — нажмите чтобы применить',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF1565C0)),
+                              Flexible(
+                                child: Text(
+                                  'Health Connect: ${_healthWeight!.toStringAsFixed(1)} кг — нажмите чтобы применить',
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF1565C0)),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ],
                           ),

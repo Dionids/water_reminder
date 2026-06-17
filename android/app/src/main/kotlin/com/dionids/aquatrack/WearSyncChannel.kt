@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.util.Log
+import com.google.android.gms.wearable.MessageClient
+import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import io.flutter.embedding.engine.FlutterEngine
@@ -19,6 +21,7 @@ object WearSyncChannel {
 
     private var eventSink: EventChannel.EventSink? = null
     private var receiver: BroadcastReceiver? = null
+    private var messageListener: MessageClient.OnMessageReceivedListener? = null
 
     fun register(context: Context, flutterEngine: FlutterEngine) {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -47,10 +50,12 @@ object WearSyncChannel {
             override fun onListen(arguments: Any?, sink: EventChannel.EventSink?) {
                 eventSink = sink
                 registerBroadcastReceiver(context)
+                registerMessageListener(context)
             }
             override fun onCancel(arguments: Any?) {
                 eventSink = null
                 unregisterReceiver(context)
+                unregisterMessageListener(context)
             }
         })
     }
@@ -111,5 +116,25 @@ object WearSyncChannel {
             try { context.unregisterReceiver(it) } catch (_: Exception) {}
         }
         receiver = null
+    }
+
+    private fun registerMessageListener(context: Context) {
+        messageListener = MessageClient.OnMessageReceivedListener { event: MessageEvent ->
+            if (event.path == "/aquatrack/add_water") {
+                val parts    = String(event.data).split(",")
+                val addedMl  = parts.getOrNull(2)?.toIntOrNull() ?: 250
+                Log.d(TAG, "MessageClient received from watch: +$addedMl ml")
+                eventSink?.success(mapOf("added_ml" to addedMl))
+            }
+        }
+        Wearable.getMessageClient(context).addListener(messageListener!!)
+        Log.d(TAG, "MessageClient listener registered")
+    }
+
+    private fun unregisterMessageListener(context: Context) {
+        messageListener?.let {
+            Wearable.getMessageClient(context).removeListener(it)
+        }
+        messageListener = null
     }
 }
