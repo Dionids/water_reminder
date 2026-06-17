@@ -113,12 +113,14 @@ class MainActivity : ComponentActivity() {
         val goal  = WaterDataStore.getGoalMl(this)
         val pct   = WaterDataStore.getPercent(this)
 
-        waterFace.setTarget(pct)
-        waterFace.currentMl = newMl
-        waterFace.goalMl    = goal
+        // Обновляем UI только если Activity не закрывается (не из плитки)
+        if (!isFinishing) {
+            waterFace.setTarget(pct)
+            waterFace.currentMl = newMl
+            waterFace.goalMl    = goal
+        }
 
         AquaTileService.requestUpdate(this)
-
         syncToPhone(newMl, goal)
     }
 

@@ -454,13 +454,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            SelectableText(
-              profile!.firebaseUid!,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.grey,
-                fontFamily: 'monospace',
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                profile!.firebaseUid!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                  fontFamily: 'monospace',
+                ),
+                softWrap: true,
+                overflow: TextOverflow.visible,
               ),
             ),
             const SizedBox(height: 4),
