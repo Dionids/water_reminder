@@ -4,6 +4,7 @@ import android.content.Intent
 import android.util.Log
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 
 /**
@@ -24,6 +25,28 @@ class WearDataListenerService : WearableListenerService() {
         const val EXTRA_ADDED_ML   = "added_ml"
         private const val TAG = "WearDataListener"
         private const val DEFAULT_GLASS_ML = 250
+    }
+
+    // MessageClient — прямой BT канал, работает без Google аккаунта
+    override fun onMessageReceived(messageEvent: MessageEvent) {
+        if (messageEvent.path == "/aquatrack/add_water") {
+            val parts    = String(messageEvent.data).split(",")
+            val currentMl = parts.getOrNull(0)?.toIntOrNull() ?: -1
+            val goalMl    = parts.getOrNull(1)?.toIntOrNull() ?: -1
+            val addedMl   = parts.getOrNull(2)?.toIntOrNull() ?: DEFAULT_GLASS_ML
+
+            if (currentMl >= 0 && goalMl > 0) {
+                Log.d(TAG, "Message from watch: +$addedMl ml → $currentMl/$goalMl")
+                val intent = Intent(ACTION_WATER_FROM_WEAR).apply {
+                    putExtra(EXTRA_CURRENT_ML, currentMl)
+                    putExtra(EXTRA_GOAL_ML,    goalMl)
+                    putExtra(EXTRA_ADDED_ML,   addedMl)
+                    putExtra("added_ml",       addedMl)
+                    setPackage(packageName)
+                }
+                sendBroadcast(intent)
+            }
+        }
     }
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {

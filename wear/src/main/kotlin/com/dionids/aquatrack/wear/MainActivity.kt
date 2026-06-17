@@ -123,7 +123,31 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun syncToPhone(currentMl: Int, goalMl: Int) {
-        // Отправляем через Data Layer (работает когда часы связаны с телефоном)
+        // MessageClient — работает напрямую по BT без Google аккаунта
+        val messageClient = com.google.android.gms.wearable.Wearable.getMessageClient(this)
+        val nodeClient    = com.google.android.gms.wearable.Wearable.getNodeClient(this)
+
+        val payload = "$currentMl,$goalMl,${WaterDataStore.GLASS_ML}".toByteArray()
+
+        nodeClient.connectedNodes.addOnSuccessListener { nodes ->
+            if (nodes.isEmpty()) {
+                Log.w(TAG, "No connected nodes (phone not reachable via BT)")
+                // Fallback: Data Layer
+                syncViaDataLayer(currentMl, goalMl)
+                return@addOnSuccessListener
+            }
+            for (node in nodes) {
+                messageClient.sendMessage(node.id, "/aquatrack/add_water", payload)
+                    .addOnSuccessListener { Log.d(TAG, "Message sent to ${node.displayName}: $currentMl/$goalMl") }
+                    .addOnFailureListener { Log.w(TAG, "Message failed to ${node.displayName}: ${it.message}") }
+            }
+        }.addOnFailureListener {
+            Log.w(TAG, "NodeClient failed: ${it.message}")
+            syncViaDataLayer(currentMl, goalMl)
+        }
+    }
+
+    private fun syncViaDataLayer(currentMl: Int, goalMl: Int) {
         try {
             val request = PutDataMapRequest.create("/aquatrack/add_water").apply {
                 dataMap.putInt("current_ml", currentMl)
@@ -132,39 +156,10 @@ class MainActivity : ComponentActivity() {
                 dataMap.putLong("timestamp", System.currentTimeMillis())
             }.asPutDataRequest().setUrgent()
             dataClient.putDataItem(request)
-                .addOnSuccessListener { Log.d(TAG, "Synced via DataLayer: $currentMl/$goalMl ml") }
-                .addOnFailureListener { Log.w(TAG, "DataLayer failed: ${it.message}") }
+                .addOnSuccessListener { Log.d(TAG, "DataLayer fallback: $currentMl/$goalMl") }
+                .addOnFailureListener { Log.w(TAG, "DataLayer also failed: ${it.message}") }
         } catch (e: Exception) {
             Log.w(TAG, "DataLayer error: $e")
         }
-
-        // Параллельно отправляем напрямую на бэкенд через HTTP
-        // Работает пока часы подключены к Wi-Fi (не зависит от телефона)
-        syncToBackend(currentMl, goalMl)
-    }
-
-    private fun syncToBackend(currentMl: Int, goalMl: Int) {
-        val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
-        val uid = prefs.getString("flutter.firebase_uid", null) ?: run {
-            Log.w(TAG, "No firebase_uid in SharedPreferences, skipping backend sync")
-            return
-        }
-
-        Thread {
-            try {
-                val url = java.net.URL("https://lovely-trust-production-ad76.up.railway.app/water-log")
-                val body = """{"firebase_uid":"$uid","amount_ml":${WaterDataStore.GLASS_ML},"logged_at":null}"""
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.doOutput = true
-                conn.outputStream.write(body.toByteArray())
-                val code = conn.responseCode
-                Log.d(TAG, "Backend sync: $code for uid=$uid +${WaterDataStore.GLASS_ML}ml")
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.w(TAG, "Backend sync failed: $e")
-            }
-        }.start()
     }
 }
