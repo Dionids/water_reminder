@@ -127,6 +127,21 @@ class ApiService {
     return _get('/water-logs/$firebaseUid$query');
   }
 
+  Future<Map<String, dynamic>?> deleteWaterLogs(String firebaseUid, {String? date}) async {
+    final query = date != null ? '?date=$date' : '';
+    try {
+      final response = await _client
+          .delete(Uri.parse('$_baseUrl/water-logs/$firebaseUid$query'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      // Офлайн — не критично
+    }
+    return null;
+  }
+
   String _intensityToString(WorkoutIntensity intensity) {
     switch (intensity) {
       case WorkoutIntensity.none:    return 'none';

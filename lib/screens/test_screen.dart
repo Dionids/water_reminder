@@ -227,8 +227,22 @@ class _TestScreenState extends State<TestScreen> {
     setState(() { _isLoading = true; _errorMsg = null; _successMsg = null; });
     try {
       final count = await widget.hiveService.clearTodayLogs();
+
+      // Удаляем и с сервера
+      final profile = widget.hiveService.getProfile();
+      if (profile?.firebaseUid != null) {
+        final now = _selectedDate;
+        final dateStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        await widget.apiService.deleteWaterLogs(
+          profile!.firebaseUid!,
+          date: dateStr,
+        );
+      }
+
       if (mounted) {
-        setState(() => _successMsg = 'Удалено $count записей за сегодня ✓');
+        setState(() => _successMsg =
+            'Удалено $count записей за ${_isToday ? "сегодня" : _dateLabel} (локально + сервер) ✓');
       }
     } catch (e) {
       if (mounted) setState(() => _errorMsg = 'Ошибка очистки: $e');

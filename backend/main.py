@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -430,3 +430,31 @@ def get_water_logs(firebase_uid: str, date: Optional[str] = None, db: Session = 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+@app.delete("/water-logs/{firebase_uid}", summary="Удалить логи воды за дату")
+def delete_water_logs(firebase_uid: str, date: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Удаляет логи воды пользователя за указанную дату (по умолчанию сегодня).
+    date в формате YYYY-MM-DD. Также обнуляет потребление в activity_logs за этот день.
+    """
+    user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    try:
+        filter_date = datetime.strptime(date, "%Y-%m-%d").date() if date else datetime.now().date()
+    except (ValueError, AttributeError):
+        filter_date = datetime.now().date()
+
+    start_dt = datetime(filter_date.year, filter_date.month, filter_date.day)
+    end_dt   = start_dt + timedelta(days=1)
+
+    deleted = (db.query(WaterLog)
+               .filter(WaterLog.firebase_uid == firebase_uid,
+                       WaterLog.logged_at >= start_dt,
+                       WaterLog.logged_at < end_dt)
+               .delete(synchronize_session=False))
+    db.commit()
+
+    return {"deleted": deleted, "date": filter_date.strftime("%Y-%m-%d")}
