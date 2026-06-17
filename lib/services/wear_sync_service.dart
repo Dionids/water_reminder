@@ -29,6 +29,21 @@ class WearSyncService {
     return _watchStream!;
   }
 
+  /// Запрашивает текущие данные воды с часов.
+  /// Возвращает количество мл выпитых на часах, или null если часы недоступны.
+  Future<int?> pullFromWatch() async {
+    try {
+      final result = await _method.invokeMethod('pullFromWatch');
+      if (result is Map) {
+        return (result['current_ml'] as int?);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('WearSyncService.pullFromWatch: $e');
+      return null;
+    }
+  }
+
   /// Отправить текущий прогресс на часы — обновляет плитку и экран часов.
   Future<void> pushToWatch({
     required int currentMl,

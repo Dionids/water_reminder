@@ -42,6 +42,10 @@ object WearSyncChannel {
                     scheduleReminderOnWatch(context, scheduledAt, glassIndex, totalGlasses)
                     result.success(null)
                 }
+                "pullFromWatch" -> {
+                    // Запрашиваем актуальные данные с часов через MessageClient
+                    requestDataFromWatch(context, result)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -58,6 +62,54 @@ object WearSyncChannel {
                 unregisterMessageListener(context)
             }
         })
+    }
+
+    private fun requestDataFromWatch(context: Context, result: MethodChannel.Result) {
+        val messageClient = Wearable.getMessageClient(context)
+        val nodeClient    = Wearable.getNodeClient(context)
+        var replied = false
+
+        // Временный слушатель ответа от часов
+        val listener = object : MessageClient.OnMessageReceivedListener {
+            override fun onMessageReceived(event: MessageEvent) {
+                if (event.path == "/aquatrack/data_response" && !replied) {
+                    replied = true
+                    val parts = String(event.data).split(",")
+                    val currentMl = parts.getOrNull(0)?.toIntOrNull() ?: 0
+                    val goalMl    = parts.getOrNull(1)?.toIntOrNull() ?: 2000
+                    Log.d(TAG, "Watch data response: $currentMl/$goalMl")
+                    messageClient.removeListener(this)
+                    result.success(mapOf("current_ml" to currentMl, "goal_ml" to goalMl))
+                }
+            }
+        }
+        messageClient.addListener(listener)
+
+        nodeClient.connectedNodes.addOnSuccessListener { nodes ->
+            if (nodes.isEmpty()) {
+                Log.w(TAG, "pullFromWatch: no connected nodes")
+                messageClient.removeListener(listener)
+                if (!replied) { replied = true; result.success(null) }
+                return@addOnSuccessListener
+            }
+            for (node in nodes) {
+                messageClient.sendMessage(node.id, "/aquatrack/request_data", ByteArray(0))
+                    .addOnSuccessListener { Log.d(TAG, "Request sent to ${node.displayName}") }
+                    .addOnFailureListener { Log.w(TAG, "Request failed: ${it.message}") }
+            }
+            // Таймаут 3 секунды на ответ
+            android.os.Handler(context.mainLooper).postDelayed({
+                if (!replied) {
+                    replied = true
+                    messageClient.removeListener(listener)
+                    Log.w(TAG, "pullFromWatch: timeout")
+                    result.success(null)
+                }
+            }, 3000)
+        }.addOnFailureListener {
+            messageClient.removeListener(listener)
+            if (!replied) { replied = true; result.success(null) }
+        }
     }
 
     private fun sendDataToWatch(context: Context, currentMl: Int, goalMl: Int, timestamp: Long) {

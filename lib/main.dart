@@ -373,6 +373,44 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   /// [silent] = true — авто-синхронизация (без диалога разрешений, без SnackBar).
   /// [silent] = false — ручная синхронизация кнопкой (показывает диалог и SnackBar).
+  /// Тянет данные воды с часов и синхронизирует с приложением.
+  /// Если на часах больше воды (добавили через плитку) — досчитываем разницу.
+  Future<void> _pullWaterFromWatch() async {
+    try {
+      final watchMl = await WearSyncService().pullFromWatch();
+      if (watchMl == null) return;
+
+      final phoneMl = _todayWater.toInt();
+      if (watchMl > phoneMl) {
+        // На часах больше — добавляем разницу в приложение
+        final diff = (watchMl - phoneMl).toDouble();
+        final log = await widget.hiveService.addWaterLog(diff);
+
+        final profile = widget.hiveService.getProfile();
+        if (profile?.firebaseUid != null) {
+          try {
+            await _apiService.logWater(
+              firebaseUid: profile!.firebaseUid!,
+              amountMl:    diff,
+              loggedAt:    log.date,
+            );
+            await widget.hiveService.markLogSynced(log);
+          } catch (_) {}
+        }
+        await _loadData();
+        debugPrint('Pulled from watch: +$diff мл (watch=$watchMl, phone=$phoneMl)');
+      } else if (watchMl < phoneMl) {
+        // На телефоне больше — отправляем на часы
+        await WearSyncService().pushToWatch(
+          currentMl: phoneMl,
+          goalMl:    _dailyGoal.toInt(),
+        );
+      }
+    } catch (e) {
+      debugPrint('_pullWaterFromWatch error: $e');
+    }
+  }
+
   Future<void> _syncHealthData({bool silent = false}) async {
     // Дедупликация: не синхронизируем если прошло меньше 5 минут
     // (исключение — ручной запуск всегда разрешён)
@@ -384,6 +422,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     setState(() => _isSyncing = true);
 
     try {
+      // Сначала тянем данные с часов — вдруг там добавили воду через плитку
+      await _pullWaterFromWatch();
+
       // Авто-sync: только проверяем статус без диалога.
       // Ручной sync: запрашиваем разрешения если нужно.
       final bool granted = silent

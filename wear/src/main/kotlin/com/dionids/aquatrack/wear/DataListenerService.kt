@@ -10,6 +10,8 @@ import android.os.Build
 import android.util.Log
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.MessageEvent
+import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
 
 class DataListenerService : WearableListenerService() {
@@ -20,6 +22,20 @@ class DataListenerService : WearableListenerService() {
         const val CHANNEL_NAME        = "Напоминания о воде"
         const val EXTRA_GLASS_INDEX   = "glass_index"
         const val EXTRA_TOTAL_GLASSES = "total_glasses"
+    }
+
+    // Телефон запрашивает текущие данные с часов (pullFromWatch)
+    override fun onMessageReceived(event: MessageEvent) {
+        if (event.path == "/aquatrack/request_data") {
+            val currentMl = WaterDataStore.getCurrentMl(this)
+            val goalMl    = WaterDataStore.getGoalMl(this)
+            val payload   = "$currentMl,$goalMl".toByteArray()
+            Log.d(TAG, "Phone requested data, replying: $currentMl/$goalMl")
+
+            Wearable.getMessageClient(this).sendMessage(
+                event.sourceNodeId, "/aquatrack/data_response", payload
+            )
+        }
     }
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
