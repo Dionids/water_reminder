@@ -86,6 +86,25 @@ class HiveService {
     return box.values.toList()..sort((a, b) => b.date.compareTo(a.date));
   }
 
+  /// Удаляет все логи воды за сегодня (для демонстрации/тестов).
+  Future<int> clearTodayLogs() async {
+    final box = Hive.box<WaterLog>(waterBoxName);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final keysToDelete = box.keys.where((k) {
+      final log = box.get(k);
+      return log != null && !log.date.isBefore(today);
+    }).toList();
+    await box.deleteAll(keysToDelete);
+    return keysToDelete.length;
+  }
+
+  /// Удаляет ВСЕ логи воды (полная очистка истории).
+  Future<void> clearAllLogs() async {
+    final box = Hive.box<WaterLog>(waterBoxName);
+    await box.clear();
+  }
+
   // ── User Profile ─────────────────────────────────────────────────
 
   Future<void> saveProfile(UserProfile profile) async {

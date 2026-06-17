@@ -222,6 +222,35 @@ class _TestScreenState extends State<TestScreen> {
     }
   }
 
+  // ── Очистка данных ────────────────────────────────────────────
+  Future<void> _clearToday() async {
+    setState(() { _isLoading = true; _errorMsg = null; _successMsg = null; });
+    try {
+      final count = await widget.hiveService.clearTodayLogs();
+      if (mounted) {
+        setState(() => _successMsg = 'Удалено $count записей за сегодня ✓');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorMsg = 'Ошибка очистки: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _clearAll() async {
+    setState(() { _isLoading = true; _errorMsg = null; _successMsg = null; });
+    try {
+      await widget.hiveService.clearAllLogs();
+      if (mounted) {
+        setState(() => _successMsg = 'Вся локальная история очищена ✓');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorMsg = 'Ошибка очистки: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -494,6 +523,28 @@ class _TestScreenState extends State<TestScreen> {
                 ],
               )),
             ],
+
+            const SizedBox(height: 20),
+            const _SectionLabel('🗑 Очистка данных'),
+            _Card(child: Column(
+              children: [
+                _ActionButton(
+                  label: 'Очистить воду за сегодня',
+                  icon: Icons.delete_sweep_rounded,
+                  color: const Color(0xFFE53935),
+                  loading: _isLoading,
+                  onPressed: _clearToday,
+                ),
+                const SizedBox(height: 8),
+                _ActionButton(
+                  label: 'Очистить всю историю',
+                  icon: Icons.delete_forever_rounded,
+                  color: const Color(0xFFB71C1C),
+                  loading: _isLoading,
+                  onPressed: _clearAll,
+                ),
+              ],
+            )),
 
             const SizedBox(height: 32),
           ],
