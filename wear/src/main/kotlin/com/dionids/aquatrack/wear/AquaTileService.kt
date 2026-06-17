@@ -194,9 +194,5 @@ class AquaTileService : SuspendingTileService() {
 
     private fun spacer(dp: Int) = Spacer.Builder().setHeight(dp(dp.toFloat())).build()
 
-    private fun fmt(ml: Int): String = if (ml >= 1000) {
-        val thousands = ml / 1000
-        val hundreds  = ml % 1000
-        if (hundreds == 0) "${thousands}к" else "${thousands} ${hundreds}"
-    } else ml.toString()
+    private fun fmt(ml: Int): String = ml.toString()
 }
