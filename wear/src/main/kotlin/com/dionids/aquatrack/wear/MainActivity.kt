@@ -61,11 +61,14 @@ class MainActivity : ComponentActivity() {
     /**
      * Если запущено с action=add_water (например, из Tile кнопки) — сразу добавляем стакан.
      */
+    private var launchedFromTile = false
+
     private fun handleIntent(intent: Intent?) {
         if (intent?.getStringExtra("action") == ACTION_ADD_WATER) {
-            Log.d(TAG, "Tile button: adding glass, closing UI")
+            Log.d(TAG, "Tile button: adding glass")
+            launchedFromTile = true
             addGlassAndSync()
-            finish()  // закрываем Activity — пользователь остаётся на плитке
+            // finish() вызывается ПОСЛЕ отправки сообщения в syncToPhone()
         }
     }
 
@@ -113,12 +116,9 @@ class MainActivity : ComponentActivity() {
         val goal  = WaterDataStore.getGoalMl(this)
         val pct   = WaterDataStore.getPercent(this)
 
-        // Обновляем UI только если Activity не закрывается (не из плитки)
-        if (!isFinishing) {
-            waterFace.setTarget(pct)
-            waterFace.currentMl = newMl
-            waterFace.goalMl    = goal
-        }
+        waterFace.setTarget(pct)
+        waterFace.currentMl = newMl
+        waterFace.goalMl    = goal
 
         AquaTileService.requestUpdate(this)
         syncToPhone(newMl, goal)
@@ -134,18 +134,34 @@ class MainActivity : ComponentActivity() {
         nodeClient.connectedNodes.addOnSuccessListener { nodes ->
             if (nodes.isEmpty()) {
                 Log.w(TAG, "No connected nodes (phone not reachable via BT)")
-                // Fallback: Data Layer
                 syncViaDataLayer(currentMl, goalMl)
+                finishIfFromTile()
                 return@addOnSuccessListener
             }
+            var pending = nodes.size
             for (node in nodes) {
                 messageClient.sendMessage(node.id, "/aquatrack/add_water", payload)
-                    .addOnSuccessListener { Log.d(TAG, "Message sent to ${node.displayName}: $currentMl/$goalMl") }
-                    .addOnFailureListener { Log.w(TAG, "Message failed to ${node.displayName}: ${it.message}") }
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Message sent to ${node.displayName}: $currentMl/$goalMl")
+                        if (--pending == 0) finishIfFromTile()
+                    }
+                    .addOnFailureListener {
+                        Log.w(TAG, "Message failed to ${node.displayName}: ${it.message}")
+                        syncViaDataLayer(currentMl, goalMl)
+                        if (--pending == 0) finishIfFromTile()
+                    }
             }
         }.addOnFailureListener {
             Log.w(TAG, "NodeClient failed: ${it.message}")
             syncViaDataLayer(currentMl, goalMl)
+            finishIfFromTile()
+        }
+    }
+
+    private fun finishIfFromTile() {
+        if (launchedFromTile) {
+            // небольшая задержка чтобы сообщение точно ушло
+            waterFace.postDelayed({ finish() }, 300)
         }
     }
 
