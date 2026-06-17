@@ -377,13 +377,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   /// Если на часах больше воды (добавили через плитку) — досчитываем разницу.
   Future<void> _pullWaterFromWatch() async {
     try {
+      debugPrint('🔄 PULL: запрашиваю данные с часов...');
       final watchMl = await WearSyncService().pullFromWatch();
-      if (watchMl == null) return;
+      debugPrint('🔄 PULL: часы ответили watchMl=$watchMl');
+
+      if (watchMl == null) {
+        debugPrint('🔄 PULL: часы не ответили (null) — пропускаю');
+        return;
+      }
 
       final phoneMl = _todayWater.toInt();
+      debugPrint('🔄 PULL: телефон=$phoneMl мл, часы=$watchMl мл');
+
       if (watchMl > phoneMl) {
-        // На часах больше — добавляем разницу в приложение
         final diff = (watchMl - phoneMl).toDouble();
+        debugPrint('🔄 PULL: на часах больше → добавляю $diff мл в приложение');
         final log = await widget.hiveService.addWaterLog(diff);
 
         final profile = widget.hiveService.getProfile();
@@ -395,19 +403,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               loggedAt:    log.date,
             );
             await widget.hiveService.markLogSynced(log);
-          } catch (_) {}
+            debugPrint('🔄 PULL: $diff мл отправлено на сервер ✓');
+          } catch (e) {
+            debugPrint('🔄 PULL: ошибка отправки на сервер: $e');
+          }
         }
         await _loadData();
-        debugPrint('Pulled from watch: +$diff мл (watch=$watchMl, phone=$phoneMl)');
+        debugPrint('🔄 PULL: готово, теперь в приложении ${_todayWater.toInt()} мл');
       } else if (watchMl < phoneMl) {
-        // На телефоне больше — отправляем на часы
+        debugPrint('🔄 PULL: на телефоне больше → пушу $phoneMl мл на часы');
         await WearSyncService().pushToWatch(
           currentMl: phoneMl,
           goalMl:    _dailyGoal.toInt(),
         );
+      } else {
+        debugPrint('🔄 PULL: данные совпадают ($phoneMl мл) — ничего не делаю');
       }
     } catch (e) {
-      debugPrint('_pullWaterFromWatch error: $e');
+      debugPrint('🔄 PULL ERROR: $e');
     }
   }
 

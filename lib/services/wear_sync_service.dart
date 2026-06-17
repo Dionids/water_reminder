@@ -33,13 +33,15 @@ class WearSyncService {
   /// Возвращает количество мл выпитых на часах, или null если часы недоступны.
   Future<int?> pullFromWatch() async {
     try {
+      debugPrint('📱 WearSyncService: вызываю pullFromWatch на нативе...');
       final result = await _method.invokeMethod('pullFromWatch');
+      debugPrint('📱 WearSyncService: натив вернул $result');
       if (result is Map) {
         return (result['current_ml'] as int?);
       }
       return null;
     } catch (e) {
-      debugPrint('WearSyncService.pullFromWatch: $e');
+      debugPrint('📱 WearSyncService.pullFromWatch ERROR: $e');
       return null;
     }
   }
