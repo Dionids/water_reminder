@@ -67,13 +67,12 @@ object WearSyncChannel {
     private fun requestDataFromWatch(context: Context, result: MethodChannel.Result) {
         val messageClient = Wearable.getMessageClient(context)
         val nodeClient    = Wearable.getNodeClient(context)
-        var replied = false
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
 
         // Временный слушатель ответа от часов
         val listener = object : MessageClient.OnMessageReceivedListener {
             override fun onMessageReceived(event: MessageEvent) {
-                if (event.path == "/aquatrack/data_response" && !replied) {
-                    replied = true
+                if (event.path == "/aquatrack/data_response" && replied.compareAndSet(false, true)) {
                     val parts = String(event.data).split(",")
                     val currentMl = parts.getOrNull(0)?.toIntOrNull() ?: 0
                     val goalMl    = parts.getOrNull(1)?.toIntOrNull() ?: 2000
@@ -89,7 +88,7 @@ object WearSyncChannel {
             if (nodes.isEmpty()) {
                 Log.w(TAG, "pullFromWatch: no connected nodes")
                 messageClient.removeListener(listener)
-                if (!replied) { replied = true; result.success(null) }
+                if (replied.compareAndSet(false, true)) result.success(null)
                 return@addOnSuccessListener
             }
             for (node in nodes) {
@@ -99,8 +98,7 @@ object WearSyncChannel {
             }
             // Таймаут 3 секунды на ответ
             android.os.Handler(context.mainLooper).postDelayed({
-                if (!replied) {
-                    replied = true
+                if (replied.compareAndSet(false, true)) {
                     messageClient.removeListener(listener)
                     Log.w(TAG, "pullFromWatch: timeout")
                     result.success(null)
@@ -108,7 +106,7 @@ object WearSyncChannel {
             }, 3000)
         }.addOnFailureListener {
             messageClient.removeListener(listener)
-            if (!replied) { replied = true; result.success(null) }
+            if (replied.compareAndSet(false, true)) result.success(null)
         }
     }
 
