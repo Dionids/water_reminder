@@ -32,7 +32,7 @@ class DataListenerService : WearableListenerService() {
                     val dataMap   = DataMapItem.fromDataItem(event.dataItem).dataMap
                     val currentMl = dataMap.getInt("current_ml", -1)
                     val goalMl    = dataMap.getInt("goal_ml", -1)
-                    val uid       = dataMap.getString("firebase_uid", null)
+                    val uid: String? = dataMap.getString("firebase_uid")
                     if (currentMl >= 0 && goalMl > 0) {
                         WaterDataStore.saveWaterData(this, currentMl, goalMl)
                         // Сохраняем uid чтобы часы могли сами звать бэкенд
